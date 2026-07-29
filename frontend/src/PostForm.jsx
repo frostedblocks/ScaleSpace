@@ -1,28 +1,34 @@
 import React, { useState } from "react";
 
 /**
- * PostForm – allows text + one optional image.
- * Image is uploaded to Cloudflare R2 first, then the public URL
- * is sent to the ICP backend together with the text.
+ * PostForm – supports two ways to add one image:
+ * 1. Paste any public image URL (user’s own storage)
+ * 2. Upload a file to Cloudflare R2
+ *
+ * Only one image is allowed per post.
  */
 export default function PostForm({ actor, onPostCreated }) {
   const [content, setContent] = useState("");
+  const [mode, setMode] = useState("none"); // "none" | "url" | "upload"
+  const [imageURL, setImageURL] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleImageChange = (e) => {
+  // ---------- URL mode ----------
+  const handleURLChange = (e) => {
+    const url = e.target.value.trim();
+    setImageURL(url);
+    setPreview(url || null);
+    setError("");
+  };
+
+  // ---------- Upload mode ----------
+  const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Only one image allowed
-    if (imageFile) {
-      setError("Only one image per post is allowed.");
-      return;
-    }
-
-    // Basic size check (5 MB)
     if (file.size > 5 * 1024 * 1024) {
       setError("Image must be smaller than 5 MB.");
       return;
@@ -33,35 +39,41 @@ export default function PostForm({ actor, onPostCreated }) {
     setError("");
   };
 
-  const removeImage = () => {
+  const clearImage = () => {
+    setMode("none");
+    setImageURL("");
     setImageFile(null);
     setPreview(null);
+    setError("");
   };
 
   /**
-   * Upload image to Cloudflare R2.
-   * Replace this function with your real R2 upload logic
-   * (signed URL or AWS SDK v3).
+   * Placeholder for real Cloudflare R2 upload.
+   * Replace this with signed-URL or AWS SDK logic.
    */
   async function uploadToR2(file) {
-    // -------------------------------------------------------
-    // PLACEHOLDER – replace with real Cloudflare R2 upload
-    // -------------------------------------------------------
-    // Example using a signed URL approach (recommended):
-    // 1. Call your own small backend or Cloudflare Worker
-    //    to get a pre-signed PUT URL.
-    // 2. PUT the file to that URL.
-    // 3. Return the final public URL.
-    //
-    // For now we just simulate a successful upload:
     console.warn("Using placeholder R2 upload. Replace with real logic.");
-    const fakeUrl = `https://your-r2-bucket.example.com/${Date.now()}-${file.name}`;
-    return fakeUrl;
+    return `https://your-r2-bucket.example.com/${Date.now()}-${file.name}`;
+  }
+
+  // Basic check that a pasted URL looks like an image
+  function isProbablyImageURL(url) {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(u.pathname) ||
+             u.hostname.includes("imgur") ||
+             u.hostname.includes("cloudflare") ||
+             u.hostname.includes("ipfs") ||
+             u.hostname.includes("arweave");
+    } catch {
+      return false;
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!content.trim() && !imageFile) {
+    if (!content.trim() && !preview) {
       setError("Write something or add an image.");
       return;
     }
@@ -70,21 +82,30 @@ export default function PostForm({ actor, onPostCreated }) {
     setError("");
 
     try {
-      let imageURL = null;
+      let finalImageURL = null;
 
-      if (imageFile) {
-        imageURL = await uploadToR2(imageFile);
+      if (mode === "url") {
+        if (!isProbablyImageURL(imageURL)) {
+          setError("That does not look like a valid image URL.");
+          setLoading(false);
+          return;
+        }
+        finalImageURL = imageURL;
+      } else if (mode === "upload" && imageFile) {
+        finalImageURL = await uploadToR2(imageFile);
       }
 
-      // Call the Motoko backend
-      // makePost(content, imageURL) returns ?Nat (postId)
-      const result = await actor.makePost(content, imageURL ? [imageURL] : []);
+      // Call Motoko backend: makePost(content, imageURL)
+      const result = await actor.makePost(
+        content,
+        finalImageURL ? [finalImageURL] : []
+      );
 
       if (result.length === 0) {
-        setError("Could not create post. Check your token balance or daily limit.");
+        setError("Could not create post. Check token balance or daily limit.");
       } else {
         setContent("");
-        removeImage();
+        clearImage();
         if (onPostCreated) onPostCreated(result[0]);
       }
     } catch (err) {
@@ -106,32 +127,66 @@ export default function PostForm({ actor, onPostCreated }) {
         style={{ width: "100%", padding: "0.75rem" }}
       />
 
-      <div style={{ marginTop: "0.5rem" }}>
+      {/* Image section */}
+      <div style={{ marginTop: "1rem", border: "1px solid #ddd", padding: "1rem", borderRadius: "8px" }}>
+        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 500 }}>Image (optional – one only)</p>
+
         {preview ? (
           <div>
             <img
               src={preview}
               alt="preview"
-              style={{ maxWidth: "200px", maxHeight: "200px", borderRadius: "8px" }}
+              style={{ maxWidth: "220px", maxHeight: "220px", borderRadius: "8px", display: "block" }}
+              onError={() => setError("Could not load this image. Check the URL.")}
             />
-            <button type="button" onClick={removeImage} style={{ marginLeft: "0.5rem" }}>
+            <button type="button" onClick={clearImage} style={{ marginTop: "0.5rem" }}>
               Remove image
             </button>
           </div>
         ) : (
-          <label>
-            Add one image (optional):
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              style={{ display: "block", marginTop: "0.25rem" }}
-            />
-          </label>
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            {/* Option 1: Paste URL */}
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <label style={{ display: "block", marginBottom: "0.25rem" }}>
+                Paste your own image URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={imageURL}
+                onChange={handleURLChange}
+                onFocus={() => setMode("url")}
+                style={{ width: "100%", padding: "0.4rem" }}
+              />
+              <small style={{ color: "#666" }}>
+                Works with IPFS, Arweave, Cloudflare, Imgur, etc.
+              </small>
+            </div>
+
+            <div style={{ alignSelf: "center", color: "#999" }}>or</div>
+
+            {/* Option 2: Upload to R2 */}
+            <div style={{ flex: 1, minWidth: "180px" }}>
+              <label style={{ display: "block", marginBottom: "0.25rem" }}>
+                Upload to ScaleSpace storage
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  setMode("upload");
+                  handleFileChange(e);
+                }}
+              />
+              <small style={{ color: "#666" }}>
+                Stored on Cloudflare R2 (more reliable)
+              </small>
+            </div>
+          </div>
         )}
       </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p style={{ color: "crimson", marginTop: "0.75rem" }}>{error}</p>}
 
       <button type="submit" disabled={loading} style={{ marginTop: "1rem" }}>
         {loading ? "Posting…" : "Post"}
