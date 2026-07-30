@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 
-/**
- * PostForm – free tier = 115 chars, paid tiers = 512 chars
- */
 export default function PostForm({ actor, onPostCreated, principal }) {
   const [content, setContent] = useState("");
   const [mode, setMode] = useState("none");
@@ -17,7 +14,6 @@ export default function PostForm({ actor, onPostCreated, principal }) {
   const PAID_MAX = 512;
   const maxLength = isFreeTier ? FREE_MAX : PAID_MAX;
 
-  // Load whether the user is still on free tier
   useEffect(() => {
     if (!actor || !principal) return;
 
@@ -27,9 +23,7 @@ export default function PostForm({ actor, onPostCreated, principal }) {
         if (result && result.length > 0) {
           setIsFreeTier(result[0].isFreeTier);
         }
-      } catch (err) {
-        // default to free tier
-      }
+      } catch (err) {}
     };
 
     loadStats();
@@ -65,7 +59,7 @@ export default function PostForm({ actor, onPostCreated, principal }) {
   };
 
   async function uploadToR2(file) {
-    console.warn("Using placeholder R2 upload. Replace with real logic.");
+    console.warn("Using placeholder R2 upload.");
     return `https://your-r2-bucket.example.com/${Date.now()}-${file.name}`;
   }
 
@@ -133,27 +127,44 @@ export default function PostForm({ actor, onPostCreated, principal }) {
   };
 
   const remaining = maxLength - content.length;
-  const counterColor = remaining < 20 ? "#c00" : remaining < 50 ? "#b45309" : "#888";
+  const counterColor = remaining < 20 ? "#f87171" : remaining < 50 ? "#fbbf24" : "#71717a";
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: "2rem" }}>
+    <form onSubmit={handleSubmit} style={{ marginBottom: "1.5rem" }}>
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder={isFreeTier ? "What's on your mind? (115 chars free)" : "What's on your mind?"}
         rows={3}
         maxLength={maxLength}
-        style={{ width: "100%", padding: "0.75rem" }}
+        style={{
+          width: "100%",
+          padding: "0.75rem",
+          background: "#18181b",
+          color: "#e4e4e7",
+          border: "1px solid #3f3f46",
+          borderRadius: "10px",
+          resize: "vertical",
+        }}
       />
 
-      <div style={{ textAlign: "right", fontSize: "0.8rem", color: counterColor, marginTop: "0.25rem" }}>
+      <div style={{ textAlign: "right", fontSize: "0.8rem", color: counterColor, marginTop: "0.3rem" }}>
         {content.length} / {maxLength}
-        {isFreeTier && <span style={{ marginLeft: "0.5rem", color: "#666" }}>(Free tier)</span>}
+        {isFreeTier && <span style={{ marginLeft: "0.5rem", color: "#71717a" }}>(Free tier)</span>}
       </div>
 
-      {/* Image section */}
-      <div style={{ marginTop: "1rem", border: "1px solid #ddd", padding: "1rem", borderRadius: "8px" }}>
-        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 500 }}>Image (optional – one only)</p>
+      <div
+        style={{
+          marginTop: "1rem",
+          border: "1px solid #27272a",
+          padding: "1rem",
+          borderRadius: "10px",
+          background: "#18181b",
+        }}
+      >
+        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 500, color: "#a1a1aa" }}>
+          Image (optional – one only)
+        </p>
 
         {preview ? (
           <div>
@@ -161,17 +172,17 @@ export default function PostForm({ actor, onPostCreated, principal }) {
               src={preview}
               alt="preview"
               style={{ maxWidth: "220px", maxHeight: "220px", borderRadius: "8px", display: "block" }}
-              onError={() => setError("Could not load this image. Check the URL.")}
+              onError={() => setError("Could not load this image.")}
             />
-            <button type="button" onClick={clearImage} style={{ marginTop: "0.5rem" }}>
+            <button type="button" onClick={clearImage} style={{ marginTop: "0.5rem", ...darkBtn }}>
               Remove image
             </button>
           </div>
         ) : (
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: "200px" }}>
-              <label style={{ display: "block", marginBottom: "0.25rem" }}>
-                Paste your own image URL
+            <div style={{ flex: 1, minWidth: "180px" }}>
+              <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.85rem", color: "#a1a1aa" }}>
+                Paste image URL
               </label>
               <input
                 type="url"
@@ -179,18 +190,15 @@ export default function PostForm({ actor, onPostCreated, principal }) {
                 value={imageURL}
                 onChange={handleURLChange}
                 onFocus={() => setMode("url")}
-                style={{ width: "100%", padding: "0.4rem" }}
+                style={inputStyle}
               />
-              <small style={{ color: "#666" }}>
-                Works with IPFS, Arweave, Cloudflare, Imgur, etc.
-              </small>
             </div>
 
-            <div style={{ alignSelf: "center", color: "#999" }}>or</div>
+            <div style={{ alignSelf: "center", color: "#52525b" }}>or</div>
 
-            <div style={{ flex: 1, minWidth: "180px" }}>
-              <label style={{ display: "block", marginBottom: "0.25rem" }}>
-                Upload to ScaleSpace storage
+            <div style={{ flex: 1, minWidth: "160px" }}>
+              <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.85rem", color: "#a1a1aa" }}>
+                Upload to storage
               </label>
               <input
                 type="file"
@@ -199,20 +207,49 @@ export default function PostForm({ actor, onPostCreated, principal }) {
                   setMode("upload");
                   handleFileChange(e);
                 }}
+                style={{ color: "#a1a1aa" }}
               />
-              <small style={{ color: "#666" }}>
-                Stored on Cloudflare R2 (more reliable)
-              </small>
             </div>
           </div>
         )}
       </div>
 
-      {error && <p style={{ color: "crimson", marginTop: "0.75rem" }}>{error}</p>}
+      {error && <p style={{ color: "#f87171", marginTop: "0.75rem" }}>{error}</p>}
 
-      <button type="submit" disabled={loading} style={{ marginTop: "1rem" }}>
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          marginTop: "1rem",
+          padding: "0.6rem 1.4rem",
+          background: loading ? "#3f3f46" : "#2563eb",
+          color: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: loading ? "default" : "pointer",
+          fontSize: "0.95rem",
+        }}
+      >
         {loading ? "Posting…" : "Post"}
       </button>
     </form>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  padding: "0.4rem 0.6rem",
+  background: "#09090b",
+  color: "#e4e4e7",
+  border: "1px solid #3f3f46",
+  borderRadius: "6px",
+};
+
+const darkBtn = {
+  background: "#27272a",
+  color: "#e4e4e7",
+  border: "1px solid #3f3f46",
+  borderRadius: "6px",
+  padding: "0.3rem 0.7rem",
+  cursor: "pointer",
+};
