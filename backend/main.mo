@@ -66,8 +66,8 @@ actor ScaleSpace {
   private let DAILY_LIMIT : Nat = 5;
   private let TOKENS_PER_POST : Nat = 5;
   private let TOKENS_PER_LOVE : Nat = 2;
-  private let FREE_MAX_LENGTH : Nat = 115;     // Free tier character limit
-  private let PAID_MAX_LENGTH : Nat = 512;     // Paid tier character limit
+  private let FREE_MAX_LENGTH : Nat = 115;
+  private let PAID_MAX_LENGTH : Nat = 512;
   private let MAX_COMMENT_LENGTH : Nat = 2000;
   private let TIERS : [Nat] = [200, 400, 600];
   private let REPORTS_TO_HIDE : Nat = 5;
@@ -146,12 +146,32 @@ actor ScaleSpace {
     userProfiles.get(user)
   };
 
-  // ==================== FOLLOW ====================
+  // ==================== FOLLOW / UNFOLLOW ====================
 
   public shared(msg) func follow(target : Principal) : async () {
+    if (Principal.equal(msg.caller, target)) { return }; // can't follow yourself
+
     switch (following.get(msg.caller)) {
-      case (?list) { following.put(msg.caller, Array.append(list, [target])); };
-      case null { following.put(msg.caller, [target]); };
+      case (?list) {
+        // prevent duplicates
+        for (p in list.vals()) {
+          if (Principal.equal(p, target)) { return };
+        };
+        following.put(msg.caller, Array.append(list, [target]));
+      };
+      case null {
+        following.put(msg.caller, [target]);
+      };
+    };
+  };
+
+  public shared(msg) func unfollow(target : Principal) : async () {
+    switch (following.get(msg.caller)) {
+      case (?list) {
+        let filtered = Array.filter<Principal>(list, func (p) { not Principal.equal(p, target) });
+        following.put(msg.caller, filtered);
+      };
+      case null {};
     };
   };
 
@@ -206,10 +226,9 @@ actor ScaleSpace {
 
     let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
 
-    // Character limit depends on tier
     let maxLength = if (isFree) { FREE_MAX_LENGTH } else { PAID_MAX_LENGTH };
     if (Text.size(content) > maxLength) {
-      return null; // too long for this tier
+      return null;
     };
 
     if (balance.postsToday >= DAILY_LIMIT) { return null };
@@ -261,6 +280,25 @@ actor ScaleSpace {
       let id = nextPostId - 1 - i;
       switch (posts.get(id)) {
         case (?p) { if (not p.isHidden) { buf.add(p) } };
+        case null {};
+      };
+      i += 1;
+    };
+    Buffer.toArray(buf)
+  };
+
+  // Get posts by a specific author (for public profile pages)
+  public query func getPostsByAuthor(author : Principal, limit : Nat) : async [Post] {
+    let buf = Buffer.Buffer<Post>(0);
+    var i : Nat = 0;
+    while (i < nextPostId and buf.size() < limit) {
+      let id = nextPostId - 1 - i;
+      switch (posts.get(id)) {
+        case (?p) {
+          if (not p.isHidden and Principal.equal(p.author, author)) {
+            buf.add(p);
+          };
+        };
         case null {};
       };
       i += 1;
