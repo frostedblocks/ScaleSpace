@@ -9,12 +9,11 @@ export default function Profile({ actor, identity }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Master profile state
   const [isMaster, setIsMaster] = useState(false);
+  const [cloaked, setCloaked] = useState(false);
   const [ownerPrincipal, setOwnerPrincipal] = useState(null);
   const [claiming, setClaiming] = useState(false);
 
-  // Admin controls
   const [grantTo, setGrantTo] = useState("");
   const [grantAmount, setGrantAmount] = useState("100");
   const [hidePostId, setHidePostId] = useState("");
@@ -30,10 +29,11 @@ export default function Profile({ actor, identity }) {
     setLoading(true);
     setError("");
     try {
-      const [profileResult, ownerFlag, owner] = await Promise.all([
+      const [profileResult, ownerFlag, owner, cloakFlag] = await Promise.all([
         actor.getProfile(principal),
         actor.isOwner(principal),
         actor.getOwner(),
+        actor.isCloaked(),
       ]);
 
       if (profileResult && profileResult.length > 0) {
@@ -45,6 +45,7 @@ export default function Profile({ actor, identity }) {
 
       setIsMaster(!!ownerFlag);
       setOwnerPrincipal(owner);
+      setCloaked(!!cloakFlag);
     } catch (err) {
       console.error(err);
       setError("Could not load profile.");
@@ -91,6 +92,33 @@ export default function Profile({ actor, identity }) {
       setError("Could not claim master profile.");
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleToggleCloak = async () => {
+    if (!actor) return;
+    setAdminBusy(true);
+    setAdminMsg("");
+    setAdminErr("");
+
+    try {
+      const next = !cloaked;
+      const ok = await actor.setCloak(next);
+      if (ok) {
+        setCloaked(next);
+        setAdminMsg(
+          next
+            ? "Cloaked. Your Founder badge is hidden from everyone else."
+            : "Uncloaked. Founder badge is visible again."
+        );
+      } else {
+        setAdminErr("Could not change cloak setting.");
+      }
+    } catch (err) {
+      console.error(err);
+      setAdminErr("Cloak toggle failed.");
+    } finally {
+      setAdminBusy(false);
     }
   };
 
@@ -163,7 +191,7 @@ export default function Profile({ actor, identity }) {
         <h2 style={{ margin: 0, color: "#fafafa" }}>
           {isMaster ? "Master Profile" : "Your Profile"}
         </h2>
-        {isMaster && (
+        {isMaster && !cloaked && (
           <span
             style={{
               fontSize: "0.7rem",
@@ -179,6 +207,23 @@ export default function Profile({ actor, identity }) {
             Founder
           </span>
         )}
+        {isMaster && cloaked && (
+          <span
+            style={{
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              color: "#a1a1aa",
+              background: "#27272a",
+              border: "1px solid #3f3f46",
+              padding: "0.15rem 0.5rem",
+              borderRadius: "4px",
+              textTransform: "uppercase",
+            }}
+          >
+            Cloaked
+          </span>
+        )}
       </div>
 
       {principal && (
@@ -187,7 +232,6 @@ export default function Profile({ actor, identity }) {
         </p>
       )}
 
-      {/* Claim master – only if not yet claimed */}
       {ownerIsAnonymous && !isMaster && (
         <div
           style={{
@@ -219,7 +263,6 @@ export default function Profile({ actor, identity }) {
         </div>
       )}
 
-      {/* Edit profile */}
       <form onSubmit={handleSave}>
         <div style={{ marginBottom: "1.1rem" }}>
           <label style={labelStyle}>Username</label>
@@ -264,7 +307,7 @@ export default function Profile({ actor, identity }) {
                 height: "72px",
                 objectFit: "cover",
                 borderRadius: "50%",
-                border: isMaster ? "2px solid #fbbf24" : "2px solid #3f3f46",
+                border: isMaster && !cloaked ? "2px solid #fbbf24" : "2px solid #3f3f46",
               }}
               onError={(e) => {
                 e.target.style.display = "none";
@@ -293,7 +336,6 @@ export default function Profile({ actor, identity }) {
       {message && <p style={{ color: "#4ade80", marginTop: "1rem" }}>{message}</p>}
       {error && <p style={{ color: "#f87171", marginTop: "1rem" }}>{error}</p>}
 
-      {/* ========== MASTER CONTROLS ========== */}
       {isMaster && (
         <div
           style={{
@@ -311,7 +353,45 @@ export default function Profile({ actor, identity }) {
             Only you can see and use these tools.
           </p>
 
-          {/* Grant tokens */}
+          {/* Cloak */}
+          <div
+            style={{
+              marginBottom: "1.5rem",
+              padding: "0.9rem 1rem",
+              background: "#09090b",
+              borderRadius: "8px",
+              border: "1px solid #27272a",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ color: "#e4e4e7", fontWeight: 500 }}>Cloak master profile</div>
+                <div style={{ color: "#71717a", fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                  {cloaked
+                    ? "You look like a normal user in public. Admin powers still work."
+                    : "Founder badge is visible on your posts and profile."}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleCloak}
+                disabled={adminBusy}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: cloaked ? "#27272a" : "#422006",
+                  color: cloaked ? "#e4e4e7" : "#fbbf24",
+                  border: cloaked ? "1px solid #3f3f46" : "1px solid #fbbf24",
+                  borderRadius: "8px",
+                  cursor: adminBusy ? "default" : "pointer",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {adminBusy ? "…" : cloaked ? "Uncloak" : "Cloak"}
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={handleGrantTokens} style={{ marginBottom: "1.5rem" }}>
             <label style={labelStyle}>Grant tokens to a user</label>
             <input
@@ -335,7 +415,6 @@ export default function Profile({ actor, identity }) {
             </div>
           </form>
 
-          {/* Hide post */}
           <form onSubmit={handleHidePost}>
             <label style={labelStyle}>Hide a post by ID</label>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -373,7 +452,7 @@ export default function Profile({ actor, identity }) {
               <li>No daily post limit</li>
               <li>No token cost to post</li>
               <li>512 character posts</li>
-              <li>Gold Founder badge on your name</li>
+              <li>Optional public Founder badge (cloak to hide it)</li>
             </ul>
           </div>
         </div>
