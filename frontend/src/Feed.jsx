@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import PostCard from "./PostCard";
 import SearchBar from "./SearchBar";
 
-export default function Feed({ actor, currentUserPrincipal }) {
+export default function Feed({ actor, currentUserPrincipal, onUserClick }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -122,6 +122,7 @@ export default function Feed({ actor, currentUserPrincipal }) {
             post={post}
             actor={actor}
             currentUserPrincipal={currentUserPrincipal}
+            onUserClick={onUserClick}
           />
         ))}
     </div>
