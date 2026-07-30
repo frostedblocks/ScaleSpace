@@ -42,59 +42,107 @@ export default function App() {
   };
 
   return (
-    <div style={{ maxWidth: "640px", margin: "2rem auto", fontFamily: "system-ui", padding: "0 1rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
-        <h1 style={{ margin: 0, cursor: "pointer" }} onClick={() => setView("feed")}>
-          ScaleSpace
-        </h1>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0f0f11",
+        color: "#e4e4e7",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        padding: "0 1rem",
+      }}
+    >
+      <div style={{ maxWidth: "640px", margin: "0 auto", paddingTop: "1.5rem", paddingBottom: "3rem" }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1.75rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
+          <h1
+            style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa" }}
+            onClick={() => setView("feed")}
+          >
+            ScaleSpace
+          </h1>
 
-        {identity && (
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
-            <TokenBalance actor={actor} principal={identity.getPrincipal()} />
+          {identity && (
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <TokenBalance actor={actor} principal={identity.getPrincipal()} />
 
-            <button onClick={() => setView("profile")} style={{ fontSize: "0.85rem" }}>
-              Profile
-            </button>
+              <button
+                onClick={() => setView("profile")}
+                style={btnStyle}
+              >
+                Profile
+              </button>
+              <button
+                onClick={() => setView(view === "subscribe" ? "feed" : "subscribe")}
+                style={btnStyle}
+              >
+                {view === "subscribe" ? "Back" : "Get Tokens"}
+              </button>
+              <button onClick={logout} style={btnStyle}>
+                Logout
+              </button>
+            </div>
+          )}
+        </header>
+
+        {!identity ? (
+          <div style={{ textAlign: "center", marginTop: "4rem" }}>
+            <p style={{ color: "#a1a1aa", marginBottom: "1.5rem" }}>
+              A quieter place for real conversation.
+            </p>
             <button
-              onClick={() => setView(view === "subscribe" ? "feed" : "subscribe")}
-              style={{ fontSize: "0.85rem" }}
+              onClick={login}
+              style={{
+                padding: "0.7rem 1.6rem",
+                fontSize: "1rem",
+                background: "#2563eb",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
             >
-              {view === "subscribe" ? "Back" : "Get Tokens"}
-            </button>
-            <button onClick={logout} style={{ fontSize: "0.85rem" }}>
-              Logout
+              Login with Internet Identity
             </button>
           </div>
+        ) : view === "subscribe" ? (
+          <Subscribe actor={actor} />
+        ) : view === "profile" ? (
+          <Profile actor={actor} identity={identity} />
+        ) : (
+          <>
+            <PostForm
+              actor={actor}
+              principal={identity.getPrincipal()}
+              onPostCreated={() => window.location.reload()}
+            />
+
+            <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #27272a" }} />
+
+            <Feed
+              actor={actor}
+              currentUserPrincipal={identity.getPrincipal()}
+            />
+          </>
         )}
-      </header>
-
-      {!identity ? (
-        <div style={{ textAlign: "center", marginTop: "3rem" }}>
-          <p>A quieter place for real conversation.</p>
-          <button onClick={login} style={{ padding: "0.6rem 1.4rem", fontSize: "1rem" }}>
-            Login with Internet Identity
-          </button>
-        </div>
-      ) : view === "subscribe" ? (
-        <Subscribe actor={actor} />
-      ) : view === "profile" ? (
-        <Profile actor={actor} identity={identity} />
-      ) : (
-        <>
-          <PostForm
-            actor={actor}
-            principal={identity.getPrincipal()}
-            onPostCreated={() => window.location.reload()}
-          />
-
-          <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #eee" }} />
-
-          <Feed
-            actor={actor}
-            currentUserPrincipal={identity.getPrincipal()}
-          />
-        </>
-      )}
+      </div>
     </div>
   );
 }
+
+const btnStyle = {
+  fontSize: "0.85rem",
+  padding: "0.35rem 0.7rem",
+  background: "#18181b",
+  color: "#e4e4e7",
+  border: "1px solid #3f3f46",
+  borderRadius: "6px",
+  cursor: "pointer",
+};
