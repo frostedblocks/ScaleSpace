@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import ModerationQueue from "./ModerationQueue";
 import BanControls from "./BanControls";
 import SiteStats from "./SiteStats";
+import LimitControls from "./LimitControls";
 
 export default function Profile({ actor, identity }) {
   const [username, setUsername] = useState("");
@@ -357,6 +358,8 @@ export default function Profile({ actor, identity }) {
           </p>
 
           <SiteStats actor={actor} />
+
+          <LimitControls actor={actor} />
 
           <div
             style={{
