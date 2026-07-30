@@ -5,7 +5,7 @@ import FollowButton from "./FollowButton";
 import Username from "./Username";
 import TimeAgo from "./TimeAgo";
 
-export default function PostCard({ post, actor, currentUserPrincipal }) {
+export default function PostCard({ post, actor, currentUserPrincipal, onUserClick }) {
   const [likes, setLikes] = useState(post.likes);
   const [loves, setLoves] = useState(post.loves);
   const [loading, setLoading] = useState(false);
@@ -47,7 +47,6 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
         background: "#18181b",
       }}
     >
-      {/* Author + time + Follow */}
       <div
         style={{
           display: "flex",
@@ -57,9 +56,11 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "0.95rem", color: "#fafafa" }}>
-            <Username actor={actor} principal={post.author} />
-          </span>
+          <Username
+            actor={actor}
+            principal={post.author}
+            onClick={onUserClick}
+          />
           <TimeAgo timestamp={post.timestamp} />
         </div>
 
@@ -70,12 +71,10 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
         />
       </div>
 
-      {/* Content */}
       <p style={{ margin: "0 0 0.75rem 0", whiteSpace: "pre-wrap", color: "#e4e4e7", lineHeight: 1.5 }}>
         {post.content}
       </p>
 
-      {/* Image */}
       {post.imageURL && post.imageURL.length > 0 && (
         <img
           src={post.imageURL[0]}
@@ -93,7 +92,6 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
         />
       )}
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={handleLike} disabled={loading} style={actionBtn}>
           👍 {likes}
