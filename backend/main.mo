@@ -47,9 +47,7 @@ actor ScaleSpace {
   private stable var nextPostId : Nat = 0;
   private stable var nextCommentId : Nat = 0;
 
-  // Master profile owner – anonymous until claimed once via claimMasterProfile()
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
-  // When true, Founder badge is hidden from the public (admin powers still work)
   private stable var ownerCloaked : Bool = false;
 
   private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
@@ -137,8 +135,6 @@ actor ScaleSpace {
     };
   };
 
-  // ==================== MASTER / OWNER ====================
-
   public shared(msg) func claimMasterProfile() : async Text {
     if (Principal.isAnonymous(msg.caller)) {
       return "You must be logged in";
@@ -172,26 +168,16 @@ actor ScaleSpace {
     "Master profile claimed successfully"
   };
 
-  public query func getOwner() : async Principal {
-    owner
-  };
+  public query func getOwner() : async Principal { owner };
 
-  /// True if this principal is the real owner (for admin UI / powers).
-  public query func isOwner(user : Principal) : async Bool {
-    isMaster(user)
-  };
+  public query func isOwner(user : Principal) : async Bool { isMaster(user) };
 
-  /// True if this principal should show the public Founder badge.
-  /// Returns false when the master profile is cloaked.
   public query func isOwnerVisible(user : Principal) : async Bool {
     isMaster(user) and not ownerCloaked
   };
 
-  public query func isCloaked() : async Bool {
-    ownerCloaked
-  };
+  public query func isCloaked() : async Bool { ownerCloaked };
 
-  /// Owner only: hide or show the Founder badge publicly.
   public shared(msg) func setCloak(cloaked : Bool) : async Bool {
     if (not isMaster(msg.caller)) { return false };
     ownerCloaked := cloaked;
@@ -236,7 +222,26 @@ actor ScaleSpace {
     }
   };
 
-  // ==================== PROFILE ====================
+  /// Master only: list all posts that have at least one report (moderation queue).
+  /// Includes hidden posts so you can still review them.
+  public query(msg) func getReportedPosts() : async [Post] {
+    if (not isMaster(msg.caller)) { return [] };
+
+    let buf = Buffer.Buffer<Post>(0);
+    for ((id, post) in posts.entries()) {
+      if (post.reportCount > 0) {
+        buf.add(post);
+      };
+    };
+
+    let arr = Buffer.toArray(buf);
+    // Highest report count first
+    Array.sort<Post>(arr, func (a, b) {
+      if (a.reportCount > b.reportCount) { #less }
+      else if (a.reportCount < b.reportCount) { #greater }
+      else { #equal }
+    })
+  };
 
   public shared(msg) func setProfile(username : Text, bio : Text, avatarURL : Text) : async () {
     let profile : UserProfile = { username; bio; avatarURL };
@@ -313,9 +318,7 @@ actor ScaleSpace {
     true
   };
 
-  public query func getTokensPerMessage() : async Nat {
-    TOKENS_PER_MESSAGE
-  };
+  public query func getTokensPerMessage() : async Nat { TOKENS_PER_MESSAGE };
 
   public query func getUserStats(user : Principal) : async ?{
     tokens : Nat;
