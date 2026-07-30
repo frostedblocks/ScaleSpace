@@ -28,13 +28,18 @@ export default function FollowButton({ actor, targetPrincipal, currentUserPrinci
     checkFollowing();
   }, [actor, currentUserPrincipal, targetPrincipal]);
 
-  const handleFollow = async () => {
+  const handleClick = async () => {
     if (!actor || loading) return;
     setLoading(true);
 
     try {
-      await actor.follow(targetPrincipal);
-      setIsFollowing(true);
+      if (isFollowing) {
+        await actor.unfollow(targetPrincipal);
+        setIsFollowing(false);
+      } else {
+        await actor.follow(targetPrincipal);
+        setIsFollowing(true);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -46,19 +51,19 @@ export default function FollowButton({ actor, targetPrincipal, currentUserPrinci
 
   return (
     <button
-      onClick={handleFollow}
-      disabled={loading || isFollowing}
+      onClick={handleClick}
+      disabled={loading}
       style={{
         fontSize: "0.8rem",
         padding: "0.2rem 0.75rem",
         borderRadius: "12px",
         border: isFollowing ? "1px solid #3f3f46" : "1px solid #2563eb",
         background: isFollowing ? "#18181b" : "#1e3a5f",
-        color: isFollowing ? "#71717a" : "#93c5fd",
-        cursor: isFollowing ? "default" : "pointer",
+        color: isFollowing ? "#a1a1aa" : "#93c5fd",
+        cursor: "pointer",
       }}
     >
-      {loading ? "…" : isFollowing ? "Following" : "Follow"}
+      {loading ? "…" : isFollowing ? "Unfollow" : "Follow"}
     </button>
   );
 }
