@@ -49,6 +49,8 @@ actor ScaleSpace {
 
   // Master profile owner – anonymous until claimed once via claimMasterProfile()
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
+  // When true, Founder badge is hidden from the public (admin powers still work)
+  private stable var ownerCloaked : Bool = false;
 
   private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
   private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
@@ -137,8 +139,6 @@ actor ScaleSpace {
 
   // ==================== MASTER / OWNER ====================
 
-  /// Call this once while logged in with your Internet Identity.
-  /// First caller becomes the permanent master profile owner.
   public shared(msg) func claimMasterProfile() : async Text {
     if (Principal.isAnonymous(msg.caller)) {
       return "You must be logged in";
@@ -151,8 +151,8 @@ actor ScaleSpace {
     };
 
     owner := msg.caller;
+    ownerCloaked := false;
 
-    // Default founder profile (you can edit later)
     let profile : UserProfile = {
       username = "ScaleSpace";
       bio = "Founder of ScaleSpace — a quieter place for real conversation.";
@@ -160,7 +160,6 @@ actor ScaleSpace {
     };
     userProfiles.put(msg.caller, profile);
 
-    // Give the founder a starting token balance for testing ops
     let bal = getUserBalance(msg.caller);
     userBalances.put(msg.caller, {
       tokens = bal.tokens + 1000;
@@ -177,11 +176,28 @@ actor ScaleSpace {
     owner
   };
 
+  /// True if this principal is the real owner (for admin UI / powers).
   public query func isOwner(user : Principal) : async Bool {
     isMaster(user)
   };
 
-  /// Owner only: grant tokens to any user
+  /// True if this principal should show the public Founder badge.
+  /// Returns false when the master profile is cloaked.
+  public query func isOwnerVisible(user : Principal) : async Bool {
+    isMaster(user) and not ownerCloaked
+  };
+
+  public query func isCloaked() : async Bool {
+    ownerCloaked
+  };
+
+  /// Owner only: hide or show the Founder badge publicly.
+  public shared(msg) func setCloak(cloaked : Bool) : async Bool {
+    if (not isMaster(msg.caller)) { return false };
+    ownerCloaked := cloaked;
+    true
+  };
+
   public shared(msg) func adminGrantTokens(to : Principal, amount : Nat) : async Bool {
     if (not isMaster(msg.caller)) { return false };
     if (amount == 0) { return true };
@@ -197,7 +213,6 @@ actor ScaleSpace {
     true
   };
 
-  /// Owner only: instantly hide a post
   public shared(msg) func adminHidePost(postId : Nat) : async Bool {
     if (not isMaster(msg.caller)) { return false };
 
@@ -331,7 +346,6 @@ actor ScaleSpace {
     let master = isMaster(msg.caller);
     let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
 
-    // Master can post longer (paid limit) and is not blocked by daily/free limits
     let maxLength = if (master or not isFree) { PAID_MAX_LENGTH } else { FREE_MAX_LENGTH };
     if (Text.size(content) > maxLength) {
       return null;
