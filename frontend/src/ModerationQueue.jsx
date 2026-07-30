@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 
 /**
- * Master-only list of reported posts, sorted by report count.
- * Hide from here without needing to remember post IDs.
+ * Master-only list of reported / hidden posts.
  */
 export default function ModerationQueue({ actor }) {
   const [posts, setPosts] = useState([]);
@@ -51,6 +50,27 @@ export default function ModerationQueue({ actor }) {
     }
   };
 
+  const handleUnhide = async (postId) => {
+    if (!actor) return;
+    setBusyId(postId.toString());
+    setInfo("");
+    setError("");
+    try {
+      const ok = await actor.adminUnhidePost(postId);
+      if (ok) {
+        setInfo(`Post #${postId} restored to the feed. Reports cleared.`);
+        await load();
+      } else {
+        setError("Unhide failed.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Unhide failed.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div style={{ marginBottom: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
@@ -75,13 +95,13 @@ export default function ModerationQueue({ actor }) {
       </div>
 
       <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.8rem", color: "#71717a" }}>
-        Posts with at least one report. Sorted by most reports first.
+        Reported or hidden posts. Most reports first. Unhide clears reports so it won’t auto-hide again immediately.
       </p>
 
       {loading && <p style={{ color: "#71717a", fontSize: "0.9rem" }}>Loading…</p>}
 
       {!loading && posts.length === 0 && (
-        <p style={{ color: "#52525b", fontSize: "0.9rem" }}>No reported posts right now.</p>
+        <p style={{ color: "#52525b", fontSize: "0.9rem" }}>No reported or hidden posts right now.</p>
       )}
 
       {posts.map((p) => {
@@ -97,7 +117,7 @@ export default function ModerationQueue({ actor }) {
               marginBottom: "0.65rem",
               padding: "0.75rem 0.85rem",
               background: "#09090b",
-              border: "1px solid #27272a",
+              border: p.isHidden ? "1px solid #422006" : "1px solid #27272a",
               borderRadius: "8px",
             }}
           >
@@ -114,9 +134,11 @@ export default function ModerationQueue({ actor }) {
                 <div style={{ fontSize: "0.8rem", color: "#a1a1aa", marginBottom: "0.3rem" }}>
                   <strong style={{ color: "#e4e4e7" }}>#{id.toString()}</strong>
                   {" · "}
-                  <span style={{ color: "#f87171" }}>{Number(p.reportCount)} report{Number(p.reportCount) === 1 ? "" : "s"}</span>
+                  <span style={{ color: "#f87171" }}>
+                    {Number(p.reportCount)} report{Number(p.reportCount) === 1 ? "" : "s"}
+                  </span>
                   {p.isHidden && (
-                    <span style={{ marginLeft: "0.4rem", color: "#71717a" }}>(already hidden)</span>
+                    <span style={{ marginLeft: "0.4rem", color: "#fbbf24" }}>(hidden)</span>
                   )}
                 </div>
                 <div style={{ color: "#e4e4e7", fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>
@@ -127,25 +149,45 @@ export default function ModerationQueue({ actor }) {
                 </div>
               </div>
 
-              {!p.isHidden && (
-                <button
-                  type="button"
-                  onClick={() => handleHide(id)}
-                  disabled={busy}
-                  style={{
-                    padding: "0.4rem 0.75rem",
-                    background: "#7f1d1d",
-                    color: "#fecaca",
-                    border: "1px solid #991b1b",
-                    borderRadius: "6px",
-                    cursor: busy ? "default" : "pointer",
-                    fontSize: "0.85rem",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {busy ? "…" : "Hide"}
-                </button>
-              )}
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                {p.isHidden ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUnhide(id)}
+                    disabled={busy}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: "#14532d",
+                      color: "#86efac",
+                      border: "1px solid #166534",
+                      borderRadius: "6px",
+                      cursor: busy ? "default" : "pointer",
+                      fontSize: "0.85rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {busy ? "…" : "Unhide"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleHide(id)}
+                    disabled={busy}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: "#7f1d1d",
+                      color: "#fecaca",
+                      border: "1px solid #991b1b",
+                      borderRadius: "6px",
+                      cursor: busy ? "default" : "pointer",
+                      fontSize: "0.85rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {busy ? "…" : "Hide"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         );
