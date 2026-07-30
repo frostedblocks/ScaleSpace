@@ -2,10 +2,9 @@ import React, { useState, useEffect } from "react";
 import PostCard from "./PostCard";
 
 /**
- * Basic feed that loads the most recent posts from the backend
- * and displays them using PostCard.
+ * Basic feed that loads recent posts and displays them with PostCard.
  */
-export default function Feed({ actor }) {
+export default function Feed({ actor, currentUserPrincipal }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -17,7 +16,6 @@ export default function Feed({ actor }) {
     setError("");
 
     try {
-      // getRecentPosts(limit) returns an array of posts
       const result = await actor.getRecentPosts(30);
       setPosts(result);
     } catch (err) {
@@ -57,7 +55,12 @@ export default function Feed({ actor }) {
       </div>
 
       {posts.map((post) => (
-        <PostCard key={post.id.toString()} post={post} actor={actor} />
+        <PostCard
+          key={post.id.toString()}
+          post={post}
+          actor={actor}
+          currentUserPrincipal={currentUserPrincipal}
+        />
       ))}
     </div>
   );
