@@ -15,7 +15,7 @@ actor ScaleSpace {
   type UserProfile = {
     username : Text;
     bio : Text;
-    avatarURL : Text; // Cloudflare R2 or Arweave URL
+    avatarURL : Text;
   };
 
   type UserBalance = {
@@ -30,10 +30,12 @@ actor ScaleSpace {
     id : Nat;
     author : Principal;
     content : Text;
-    imageURL : ?Text; // Optional – one image per post
+    imageURL : ?Text;
     timestamp : Time.Time;
     likes : Nat;
     loves : Nat;
+    reportCount : Nat;
+    isHidden : Bool;
   };
 
   type Comment = {
@@ -53,19 +55,21 @@ actor ScaleSpace {
   private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
   private var posts = HashMap.HashMap<Nat, Post>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
   private var comments = HashMap.HashMap<Nat, Comment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
-  private var postComments = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) }); // postId -> commentIds
+  private var postComments = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
   private var following = HashMap.HashMap<Principal, [Principal]>(0, Principal.equal, Principal.hash);
-  private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash); // simple search index
+  private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
+  private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) }); // postId -> list of reporters
 
   // ==================== CONSTANTS ====================
 
-  private let FREE_TIER_LIMIT : Nat = 20;       // posts per month free
-  private let DAILY_LIMIT : Nat = 5;            // max posts per day
+  private let FREE_TIER_LIMIT : Nat = 20;
+  private let DAILY_LIMIT : Nat = 5;
   private let TOKENS_PER_POST : Nat = 5;
-  private let TOKENS_PER_LOVE : Nat = 2;        // 1 burns, 1 tips creator
+  private let TOKENS_PER_LOVE : Nat = 2;
   private let MAX_POST_LENGTH : Nat = 10000;
   private let MAX_COMMENT_LENGTH : Nat = 2000;
   private let TIERS : [Nat] = [200, 400, 600];
+  private let REPORTS_TO_HIDE : Nat = 5; // hide post after this many unique reports
 
   // ==================== HELPERS ====================
 
@@ -118,18 +122,13 @@ actor ScaleSpace {
   };
 
   private func indexPost(postId : Nat, content : Text) {
-    // Very simple keyword indexing (split by space)
     let words = Text.split(content, #char ' ');
     for (word in words) {
       let lower = Text.toLower(word);
       if (Text.size(lower) > 2) {
         switch (keywordIndex.get(lower)) {
-          case (?ids) {
-            keywordIndex.put(lower, Array.append(ids, [postId]));
-          };
-          case null {
-            keywordIndex.put(lower, [postId]);
-          };
+          case (?ids) { keywordIndex.put(lower, Array.append(ids, [postId])); };
+          case null { keywordIndex.put(lower, [postId]); };
         };
       };
     };
@@ -138,11 +137,7 @@ actor ScaleSpace {
   // ==================== PROFILE ====================
 
   public shared(msg) func setProfile(username : Text, bio : Text, avatarURL : Text) : async () {
-    let profile : UserProfile = {
-      username = username;
-      bio = bio;
-      avatarURL = avatarURL; // Cloudflare R2 URL for now, switchable to Arweave later
-    };
+    let profile : UserProfile = { username; bio; avatarURL };
     userProfiles.put(msg.caller, profile);
   };
 
@@ -154,12 +149,8 @@ actor ScaleSpace {
 
   public shared(msg) func follow(target : Principal) : async () {
     switch (following.get(msg.caller)) {
-      case (?list) {
-        following.put(msg.caller, Array.append(list, [target]));
-      };
-      case null {
-        following.put(msg.caller, [target]);
-      };
+      case (?list) { following.put(msg.caller, Array.append(list, [target])); };
+      case null { following.put(msg.caller, [target]); };
     };
   };
 
@@ -170,7 +161,7 @@ actor ScaleSpace {
     }
   };
 
-  // ==================== TOKENS / SUBSCRIBE ====================
+  // ==================== TOKENS ====================
 
   public shared(msg) func subscribe(tokenAmount : Nat) : async () {
     let current = getUserBalance(msg.caller);
@@ -204,34 +195,21 @@ actor ScaleSpace {
     }
   };
 
-  public query func getTiers() : async [Nat] {
-    TIERS
-  };
+  public query func getTiers() : async [Nat] { TIERS };
 
-  // ==================== POSTS (with image) ====================
+  // ==================== POSTS ====================
 
   public shared(msg) func makePost(content : Text, imageURL : ?Text) : async ?Nat {
-    if (Text.size(content) > MAX_POST_LENGTH) {
-      return null; // too long
-    };
+    if (Text.size(content) > MAX_POST_LENGTH) { return null };
 
     var balance = getUserBalance(msg.caller);
     balance := maybeReset(msg.caller, balance);
 
-    // Daily rate limit
-    if (balance.postsToday >= DAILY_LIMIT) {
-      return null;
-    };
+    if (balance.postsToday >= DAILY_LIMIT) { return null };
 
     let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
+    if (not isFree and balance.tokens < TOKENS_PER_POST) { return null };
 
-    if (not isFree) {
-      if (balance.tokens < TOKENS_PER_POST) {
-        return null; // not enough tokens
-      };
-    };
-
-    // Create the post
     let postId = nextPostId;
     nextPostId += 1;
 
@@ -239,16 +217,17 @@ actor ScaleSpace {
       id = postId;
       author = msg.caller;
       content = content;
-      imageURL = imageURL; // one image max
+      imageURL = imageURL;
       timestamp = Time.now();
       likes = 0;
       loves = 0;
+      reportCount = 0;
+      isHidden = false;
     };
 
     posts.put(postId, post);
     indexPost(postId, content);
 
-    // Update balance
     let newTokens = if (isFree) { balance.tokens } else { balance.tokens - TOKENS_PER_POST };
     let updated : UserBalance = {
       tokens = newTokens;
@@ -263,7 +242,10 @@ actor ScaleSpace {
   };
 
   public query func getPost(postId : Nat) : async ?Post {
-    posts.get(postId)
+    switch (posts.get(postId)) {
+      case (?p) { if (p.isHidden) { null } else { ?p } };
+      case null { null };
+    }
   };
 
   public query func getRecentPosts(limit : Nat) : async [Post] {
@@ -272,7 +254,7 @@ actor ScaleSpace {
     while (i < nextPostId and buf.size() < limit) {
       let id = nextPostId - 1 - i;
       switch (posts.get(id)) {
-        case (?p) { buf.add(p) };
+        case (?p) { if (not p.isHidden) { buf.add(p) } };
         case null {};
       };
       i += 1;
@@ -280,11 +262,76 @@ actor ScaleSpace {
     Buffer.toArray(buf)
   };
 
-  // ==================== LIKES (free) & LOVES (paid) ====================
+  // ==================== REPORT SYSTEM ====================
+
+  public shared(msg) func reportPost(postId : Nat) : async Text {
+    switch (posts.get(postId)) {
+      case null { return "Post not found" };
+      case (?post) {
+        if (post.isHidden) { return "Post already hidden" };
+
+        // Check if this user already reported it
+        switch (reports.get(postId)) {
+          case (?reporters) {
+            for (r in reporters.vals()) {
+              if (Principal.equal(r, msg.caller)) {
+                return "You already reported this post";
+              };
+            };
+            // Add new reporter
+            let newReporters = Array.append(reporters, [msg.caller]);
+            reports.put(postId, newReporters);
+
+            let newCount = newReporters.size();
+            let shouldHide = newCount >= REPORTS_TO_HIDE;
+
+            let updatedPost : Post = {
+              id = post.id;
+              author = post.author;
+              content = post.content;
+              imageURL = post.imageURL;
+              timestamp = post.timestamp;
+              likes = post.likes;
+              loves = post.loves;
+              reportCount = newCount;
+              isHidden = shouldHide;
+            };
+            posts.put(postId, updatedPost);
+
+            if (shouldHide) {
+              return "Post has been hidden due to multiple reports";
+            } else {
+              return "Report submitted. Thank you.";
+            }
+          };
+          case null {
+            // First report
+            reports.put(postId, [msg.caller]);
+            let updatedPost : Post = {
+              id = post.id;
+              author = post.author;
+              content = post.content;
+              imageURL = post.imageURL;
+              timestamp = post.timestamp;
+              likes = post.likes;
+              loves = post.loves;
+              reportCount = 1;
+              isHidden = false;
+            };
+            posts.put(postId, updatedPost);
+            return "Report submitted. Thank you.";
+          };
+        }
+      };
+    }
+  };
+
+  // ==================== LIKES & LOVES ====================
 
   public shared(msg) func likePost(postId : Nat) : async Bool {
     switch (posts.get(postId)) {
       case (?post) {
+        if (post.isHidden) { return false };
         let updated : Post = {
           id = post.id;
           author = post.author;
@@ -293,6 +340,8 @@ actor ScaleSpace {
           timestamp = post.timestamp;
           likes = post.likes + 1;
           loves = post.loves;
+          reportCount = post.reportCount;
+          isHidden = post.isHidden;
         };
         posts.put(postId, updated);
         true
@@ -301,21 +350,18 @@ actor ScaleSpace {
     }
   };
 
-  // Love costs 2 tokens: 1 burns, 1 tips the post author
   public shared(msg) func lovePost(postId : Nat) : async Bool {
     switch (posts.get(postId)) {
       case (?post) {
+        if (post.isHidden) { return false };
+
         var balance = getUserBalance(msg.caller);
         balance := maybeReset(msg.caller, balance);
 
-        if (balance.tokens < TOKENS_PER_LOVE) {
-          return false;
-        };
+        if (balance.tokens < TOKENS_PER_LOVE) { return false };
 
-        // Burn 1 + tip 1 to author
         let tipAmount : Nat = 1;
 
-        // Deduct from sender
         let senderUpdated : UserBalance = {
           tokens = balance.tokens - TOKENS_PER_LOVE;
           postsThisMonth = balance.postsThisMonth;
@@ -325,7 +371,6 @@ actor ScaleSpace {
         };
         userBalances.put(msg.caller, senderUpdated);
 
-        // Tip the author
         let authorBalance = getUserBalance(post.author);
         let authorUpdated : UserBalance = {
           tokens = authorBalance.tokens + tipAmount;
@@ -336,7 +381,6 @@ actor ScaleSpace {
         };
         userBalances.put(post.author, authorUpdated);
 
-        // Update post love count
         let updatedPost : Post = {
           id = post.id;
           author = post.author;
@@ -345,9 +389,10 @@ actor ScaleSpace {
           timestamp = post.timestamp;
           likes = post.likes;
           loves = post.loves + 1;
+          reportCount = post.reportCount;
+          isHidden = post.isHidden;
         };
         posts.put(postId, updatedPost);
-
         true
       };
       case null { false };
@@ -357,13 +402,11 @@ actor ScaleSpace {
   // ==================== COMMENTS ====================
 
   public shared(msg) func addComment(postId : Nat, content : Text) : async ?Nat {
-    if (Text.size(content) > MAX_COMMENT_LENGTH) {
-      return null;
-    };
+    if (Text.size(content) > MAX_COMMENT_LENGTH) { return null };
 
     switch (posts.get(postId)) {
       case null { return null };
-      case (?_) {};
+      case (?p) { if (p.isHidden) { return null } };
     };
 
     let commentId = nextCommentId;
@@ -378,14 +421,9 @@ actor ScaleSpace {
     };
     comments.put(commentId, comment);
 
-    // Attach to post
     switch (postComments.get(postId)) {
-      case (?list) {
-        postComments.put(postId, Array.append(list, [commentId]));
-      };
-      case null {
-        postComments.put(postId, [commentId]);
-      };
+      case (?list) { postComments.put(postId, Array.append(list, [commentId])); };
+      case null { postComments.put(postId, [commentId]); };
     };
 
     ?commentId
@@ -416,7 +454,7 @@ actor ScaleSpace {
         let buf = Buffer.Buffer<Post>(0);
         for (id in ids.vals()) {
           switch (posts.get(id)) {
-            case (?p) { buf.add(p) };
+            case (?p) { if (not p.isHidden) { buf.add(p) } };
             case null {};
           };
         };
