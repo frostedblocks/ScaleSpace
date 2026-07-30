@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { AuthClient } from "@dfinity/auth-client";
 import PostForm from "./PostForm";
 import Feed from "./Feed";
+import Subscribe from "./Subscribe";
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [actor, setActor] = useState(null);
+  const [view, setView] = useState("feed"); // "feed" | "subscribe"
 
   useEffect(() => {
     AuthClient.create().then(async (client) => {
@@ -26,7 +28,6 @@ export default function App() {
       onSuccess: async () => {
         const id = authClient.getIdentity();
         setIdentity(id);
-        // TODO: create the real actor here too
       },
     });
   };
@@ -35,16 +36,28 @@ export default function App() {
     await authClient.logout();
     setIdentity(null);
     setActor(null);
+    setView("feed");
   };
 
   return (
     <div style={{ maxWidth: "640px", margin: "2rem auto", fontFamily: "system-ui", padding: "0 1rem" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <h1 style={{ margin: 0 }}>ScaleSpace</h1>
+        <h1 style={{ margin: 0, cursor: "pointer" }} onClick={() => setView("feed")}>
+          ScaleSpace
+        </h1>
+
         {identity && (
-          <button onClick={logout} style={{ fontSize: "0.85rem" }}>
-            Logout
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <button
+              onClick={() => setView(view === "subscribe" ? "feed" : "subscribe")}
+              style={{ fontSize: "0.85rem" }}
+            >
+              {view === "subscribe" ? "Back to Feed" : "Get Tokens"}
+            </button>
+            <button onClick={logout} style={{ fontSize: "0.85rem" }}>
+              Logout
+            </button>
+          </div>
         )}
       </header>
 
@@ -55,24 +68,27 @@ export default function App() {
             Login with Internet Identity
           </button>
         </div>
+      ) : view === "subscribe" ? (
+        <Subscribe
+          actor={actor}
+          onSuccess={() => {
+            // optional: go back to feed after buying
+            // setView("feed");
+          }}
+        />
       ) : (
         <>
           <p style={{ fontSize: "0.85rem", color: "#666" }}>
             Logged in as {identity.getPrincipal().toText().slice(0, 12)}…
           </p>
 
-          {/* Post form */}
           <PostForm
             actor={actor}
-            onPostCreated={() => {
-              // simple way to refresh the feed after posting
-              window.location.reload();
-            }}
+            onPostCreated={() => window.location.reload()}
           />
 
           <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #eee" }} />
 
-          {/* Feed */}
           <Feed actor={actor} />
         </>
       )}
