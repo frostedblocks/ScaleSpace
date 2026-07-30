@@ -92,7 +92,10 @@ export default function App() {
 
           <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #eee" }} />
 
-          <Feed actor={actor} />
+          <Feed
+            actor={actor}
+            currentUserPrincipal={identity.getPrincipal()}
+          />
         </>
       )}
     </div>
