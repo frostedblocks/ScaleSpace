@@ -5,9 +5,6 @@ import FollowButton from "./FollowButton";
 import Username from "./Username";
 import TimeAgo from "./TimeAgo";
 
-/**
- * PostCard used in the feed.
- */
 export default function PostCard({ post, actor, currentUserPrincipal }) {
   const [likes, setLikes] = useState(post.likes);
   const [loves, setLoves] = useState(post.loves);
@@ -43,24 +40,24 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
   return (
     <div
       style={{
-        border: "1px solid #e0e0e0",
-        borderRadius: "10px",
-        padding: "1rem",
-        marginBottom: "1.25rem",
-        background: "#fff",
+        border: "1px solid #27272a",
+        borderRadius: "12px",
+        padding: "1rem 1.1rem",
+        marginBottom: "1rem",
+        background: "#18181b",
       }}
     >
-      {/* Author + time + Follow button */}
+      {/* Author + time + Follow */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "0.5rem",
+          marginBottom: "0.6rem",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "0.95rem" }}>
+          <span style={{ fontSize: "0.95rem", color: "#fafafa" }}>
             <Username actor={actor} principal={post.author} />
           </span>
           <TimeAgo timestamp={post.timestamp} />
@@ -74,7 +71,9 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
       </div>
 
       {/* Content */}
-      <p style={{ margin: "0 0 0.75rem 0", whiteSpace: "pre-wrap" }}>{post.content}</p>
+      <p style={{ margin: "0 0 0.75rem 0", whiteSpace: "pre-wrap", color: "#e4e4e7", lineHeight: 1.5 }}>
+        {post.content}
+      </p>
 
       {/* Image */}
       {post.imageURL && post.imageURL.length > 0 && (
@@ -84,7 +83,7 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
           style={{
             maxWidth: "100%",
             maxHeight: "400px",
-            borderRadius: "8px",
+            borderRadius: "10px",
             marginBottom: "0.75rem",
             display: "block",
           }}
@@ -95,17 +94,17 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={handleLike} disabled={loading}>
-          👍 Like ({likes})
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={handleLike} disabled={loading} style={actionBtn}>
+          👍 {likes}
         </button>
 
-        <button onClick={handleLove} disabled={loading} title="Costs 2 tokens (1 tips the author)">
-          ❤️ Love ({loves})
+        <button onClick={handleLove} disabled={loading} title="Costs 2 tokens" style={actionBtn}>
+          ❤️ {loves}
         </button>
 
-        <button onClick={() => setShowComments(!showComments)}>
-          💬 {showComments ? "Hide Comments" : "Comments"}
+        <button onClick={() => setShowComments(!showComments)} style={actionBtn}>
+          💬 {showComments ? "Hide" : "Comments"}
         </button>
 
         <ReportButton actor={actor} postId={post.id} />
@@ -115,3 +114,13 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
     </div>
   );
 }
+
+const actionBtn = {
+  background: "#27272a",
+  color: "#e4e4e7",
+  border: "1px solid #3f3f46",
+  borderRadius: "6px",
+  padding: "0.3rem 0.7rem",
+  fontSize: "0.85rem",
+  cursor: "pointer",
+};
