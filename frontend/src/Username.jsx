@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 
 /**
- * Displays a user's username if they have set one,
- * otherwise falls back to a short principal.
+ * Displays a user's avatar + username.
+ * Falls back to a short principal if no profile is set.
  */
-export default function Username({ actor, principal }) {
-  const [name, setName] = useState(null);
+export default function Username({ actor, principal, size = 28 }) {
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     if (!actor || !principal) return;
@@ -13,25 +13,67 @@ export default function Username({ actor, principal }) {
     const load = async () => {
       try {
         const result = await actor.getProfile(principal);
-        if (result && result.length > 0 && result[0].username) {
-          setName(result[0].username);
+        if (result && result.length > 0) {
+          setProfile(result[0]);
         }
       } catch (err) {
-        // silent fail – just show principal
+        // silent fail
       }
     };
 
     load();
   }, [actor, principal]);
 
-  if (name) {
-    return <span style={{ fontWeight: 500 }}>{name}</span>;
-  }
+  const name = profile?.username || null;
+  const avatarURL = profile?.avatarURL || null;
 
-  // Fallback
   return (
-    <span style={{ color: "#666" }}>
-      {principal.toString().slice(0, 10)}…
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+      {/* Avatar */}
+      {avatarURL ? (
+        <img
+          src={avatarURL}
+          alt=""
+          style={{
+            width: size,
+            height: size,
+            borderRadius: "50%",
+            objectFit: "cover",
+            border: "1px solid #3f3f46",
+            background: "#27272a",
+          }}
+          onError={(e) => {
+            e.target.style.display = "none";
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: size,
+            height: size,
+            borderRadius: "50%",
+            background: "#27272a",
+            border: "1px solid #3f3f46",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: size * 0.4,
+            color: "#71717a",
+            flexShrink: 0,
+          }}
+        >
+          {name ? name[0].toUpperCase() : "?"}
+        </div>
+      )}
+
+      {/* Name */}
+      {name ? (
+        <span style={{ fontWeight: 500, color: "#fafafa" }}>{name}</span>
+      ) : (
+        <span style={{ color: "#a1a1aa" }}>
+          {principal.toString().slice(0, 10)}…
+        </span>
+      )}
     </span>
   );
 }
