@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import ReportButton from "./ReportButton";
+import Comments from "./Comments";
 
 /**
- * Simple PostCard used in the feed.
- * Shows content, optional image, like, love, and report buttons.
+ * PostCard used in the feed.
+ * Shows content, optional image, like, love, report, and comments.
  */
 export default function PostCard({ post, actor }) {
   const [likes, setLikes] = useState(post.likes);
   const [loves, setLoves] = useState(post.loves);
   const [loading, setLoading] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   const handleLike = async () => {
     if (!actor || loading) return;
@@ -82,8 +84,15 @@ export default function PostCard({ post, actor }) {
           ❤️ Love ({loves})
         </button>
 
+        <button onClick={() => setShowComments(!showComments)}>
+          💬 {showComments ? "Hide Comments" : "Comments"}
+        </button>
+
         <ReportButton actor={actor} postId={post.id} />
       </div>
+
+      {/* Comments section */}
+      {showComments && <Comments actor={actor} postId={post.id} />}
     </div>
   );
 }
