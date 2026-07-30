@@ -1,8 +1,5 @@
 import React, { useState } from "react";
 
-/**
- * Simple search bar that calls the backend searchPosts function.
- */
 export default function SearchBar({ onSearch, onClear }) {
   const [query, setQuery] = useState("");
 
@@ -37,15 +34,38 @@ export default function SearchBar({ onSearch, onClear }) {
           flex: 1,
           padding: "0.55rem 0.75rem",
           borderRadius: "8px",
-          border: "1px solid #ddd",
+          border: "1px solid #3f3f46",
+          background: "#18181b",
+          color: "#e4e4e7",
           fontSize: "0.95rem",
         }}
       />
-      <button type="submit" style={{ padding: "0.55rem 1rem" }}>
+      <button
+        type="submit"
+        style={{
+          padding: "0.55rem 1rem",
+          background: "#27272a",
+          color: "#e4e4e7",
+          border: "1px solid #3f3f46",
+          borderRadius: "8px",
+          cursor: "pointer",
+        }}
+      >
         Search
       </button>
       {query && (
-        <button type="button" onClick={handleClear} style={{ padding: "0.55rem 0.8rem" }}>
+        <button
+          type="button"
+          onClick={handleClear}
+          style={{
+            padding: "0.55rem 0.8rem",
+            background: "#18181b",
+            color: "#a1a1aa",
+            border: "1px solid #3f3f46",
+            borderRadius: "8px",
+            cursor: "pointer",
+          }}
+        >
           Clear
         </button>
       )}
