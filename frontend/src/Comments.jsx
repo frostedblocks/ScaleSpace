@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
+import Username from "./Username";
 
 /**
  * Comments section for a single post.
- * Shows existing comments and lets the user add a new one.
  */
 export default function Comments({ actor, postId }) {
   const [comments, setComments] = useState([]);
@@ -41,7 +41,7 @@ export default function Comments({ actor, postId }) {
       const result = await actor.addComment(postId, newComment.trim());
       if (result && result.length > 0) {
         setNewComment("");
-        await loadComments(); // refresh list
+        await loadComments();
       } else {
         setError("Could not add comment.");
       }
@@ -74,8 +74,8 @@ export default function Comments({ actor, postId }) {
                 fontSize: "0.9rem",
               }}
             >
-              <div style={{ fontSize: "0.75rem", color: "#666", marginBottom: "0.2rem" }}>
-                {c.author.toString().slice(0, 10)}…
+              <div style={{ fontSize: "0.8rem", marginBottom: "0.25rem" }}>
+                <Username actor={actor} principal={c.author} />
               </div>
               <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
             </div>
