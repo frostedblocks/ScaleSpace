@@ -222,20 +222,43 @@ actor ScaleSpace {
     }
   };
 
-  /// Master only: list all posts that have at least one report (moderation queue).
-  /// Includes hidden posts so you can still review them.
+  /// Master only: restore a hidden post to the public feed.
+  /// Clears reports so it does not immediately re-hide at the threshold.
+  public shared(msg) func adminUnhidePost(postId : Nat) : async Bool {
+    if (not isMaster(msg.caller)) { return false };
+
+    switch (posts.get(postId)) {
+      case null { false };
+      case (?post) {
+        reports.delete(postId);
+        let updated : Post = {
+          id = post.id;
+          author = post.author;
+          content = post.content;
+          imageURL = post.imageURL;
+          timestamp = post.timestamp;
+          likes = post.likes;
+          loves = post.loves;
+          reportCount = 0;
+          isHidden = false;
+        };
+        posts.put(postId, updated);
+        true
+      };
+    }
+  };
+
   public query(msg) func getReportedPosts() : async [Post] {
     if (not isMaster(msg.caller)) { return [] };
 
     let buf = Buffer.Buffer<Post>(0);
     for ((id, post) in posts.entries()) {
-      if (post.reportCount > 0) {
+      if (post.reportCount > 0 or post.isHidden) {
         buf.add(post);
       };
     };
 
     let arr = Buffer.toArray(buf);
-    // Highest report count first
     Array.sort<Post>(arr, func (a, b) {
       if (a.reportCount > b.reportCount) { #less }
       else if (a.reportCount < b.reportCount) { #greater }
