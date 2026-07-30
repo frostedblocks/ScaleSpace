@@ -3,12 +3,13 @@ import { AuthClient } from "@dfinity/auth-client";
 import PostForm from "./PostForm";
 import Feed from "./Feed";
 import Subscribe from "./Subscribe";
+import Profile from "./Profile";
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [actor, setActor] = useState(null);
-  const [view, setView] = useState("feed"); // "feed" | "subscribe"
+  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile"
 
   useEffect(() => {
     AuthClient.create().then(async (client) => {
@@ -47,12 +48,18 @@ export default function App() {
         </h1>
 
         {identity && (
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setView("profile")}
+              style={{ fontSize: "0.85rem" }}
+            >
+              Profile
+            </button>
             <button
               onClick={() => setView(view === "subscribe" ? "feed" : "subscribe")}
               style={{ fontSize: "0.85rem" }}
             >
-              {view === "subscribe" ? "Back to Feed" : "Get Tokens"}
+              {view === "subscribe" ? "Back" : "Get Tokens"}
             </button>
             <button onClick={logout} style={{ fontSize: "0.85rem" }}>
               Logout
@@ -69,13 +76,9 @@ export default function App() {
           </button>
         </div>
       ) : view === "subscribe" ? (
-        <Subscribe
-          actor={actor}
-          onSuccess={() => {
-            // optional: go back to feed after buying
-            // setView("feed");
-          }}
-        />
+        <Subscribe actor={actor} />
+      ) : view === "profile" ? (
+        <Profile actor={actor} identity={identity} />
       ) : (
         <>
           <p style={{ fontSize: "0.85rem", color: "#666" }}>
