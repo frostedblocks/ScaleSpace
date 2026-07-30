@@ -58,7 +58,7 @@ actor ScaleSpace {
   private var postComments = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
   private var following = HashMap.HashMap<Principal, [Principal]>(0, Principal.equal, Principal.hash);
   private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
-  private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) }); // postId -> list of reporters
+  private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
 
   // ==================== CONSTANTS ====================
 
@@ -66,10 +66,11 @@ actor ScaleSpace {
   private let DAILY_LIMIT : Nat = 5;
   private let TOKENS_PER_POST : Nat = 5;
   private let TOKENS_PER_LOVE : Nat = 2;
-  private let MAX_POST_LENGTH : Nat = 10000;
+  private let FREE_MAX_LENGTH : Nat = 115;     // Free tier character limit
+  private let PAID_MAX_LENGTH : Nat = 512;     // Paid tier character limit
   private let MAX_COMMENT_LENGTH : Nat = 2000;
   private let TIERS : [Nat] = [200, 400, 600];
-  private let REPORTS_TO_HIDE : Nat = 5; // hide post after this many unique reports
+  private let REPORTS_TO_HIDE : Nat = 5;
 
   // ==================== HELPERS ====================
 
@@ -200,14 +201,19 @@ actor ScaleSpace {
   // ==================== POSTS ====================
 
   public shared(msg) func makePost(content : Text, imageURL : ?Text) : async ?Nat {
-    if (Text.size(content) > MAX_POST_LENGTH) { return null };
-
     var balance = getUserBalance(msg.caller);
     balance := maybeReset(msg.caller, balance);
 
+    let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
+
+    // Character limit depends on tier
+    let maxLength = if (isFree) { FREE_MAX_LENGTH } else { PAID_MAX_LENGTH };
+    if (Text.size(content) > maxLength) {
+      return null; // too long for this tier
+    };
+
     if (balance.postsToday >= DAILY_LIMIT) { return null };
 
-    let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
     if (not isFree and balance.tokens < TOKENS_PER_POST) { return null };
 
     let postId = nextPostId;
@@ -270,7 +276,6 @@ actor ScaleSpace {
       case (?post) {
         if (post.isHidden) { return "Post already hidden" };
 
-        // Check if this user already reported it
         switch (reports.get(postId)) {
           case (?reporters) {
             for (r in reporters.vals()) {
@@ -278,7 +283,6 @@ actor ScaleSpace {
                 return "You already reported this post";
               };
             };
-            // Add new reporter
             let newReporters = Array.append(reporters, [msg.caller]);
             reports.put(postId, newReporters);
 
@@ -305,7 +309,6 @@ actor ScaleSpace {
             }
           };
           case null {
-            // First report
             reports.put(postId, [msg.caller]);
             let updatedPost : Post = {
               id = post.id;
