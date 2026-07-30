@@ -2,41 +2,45 @@
 
 Decentralized interest-based community platform on the Internet Computer Protocol (ICP).
 
-## Features (current)
+## Current Features
 
 ### Backend (Motoko)
 - Free tier: 20 posts per month
 - Daily rate limit: 5 posts per day
 - Paid tiers: 200 / 400 / 600 tokens
 - 5 tokens per post (after free tier)
-- Love button: costs 2 tokens (1 burns, 1 tips the post creator)
+- Love button: 2 tokens (1 burns, 1 tips the creator)
 - Like button: free
 - Comments
 - User profiles (username, bio, avatar URL)
 - Follow system
-- Simple keyword search index
-- Posts can include **one optional image** (URL stored on-chain, file stored off-chain)
+- Keyword search
+- Report system (post is hidden after 5 unique reports)
+- Posts support one optional image (URL only – stored off-chain)
 
 ### Frontend
-- React + Vite skeleton
-- Internet Identity login ready
-- PostForm component with single-image upload support
-- Image upload target: **Cloudflare R2** (easy to switch to Arweave later)
+- Internet Identity login
+- Post form with hybrid image support (paste URL **or** upload to Cloudflare R2)
+- Feed that shows recent posts
+- Post cards with Like, Love, and Report buttons
 
-## Project structure
+## Project Structure
 ```
 backend/
-  main.mo          ← full Motoko canister
+  main.mo
 frontend/
   src/
-    App.jsx
-    PostForm.jsx   ← handles text + one image
+    App.jsx          ← main app (login + form + feed)
+    PostForm.jsx     ← create post + image
+    Feed.jsx         ← loads and displays posts
+    PostCard.jsx     ← single post with actions
+    ReportButton.jsx ← report a post
   package.json
-  README.md        ← Cloudflare R2 setup instructions
+  README.md
 ```
 
-## Next steps
-1. Wire the real canister ID and actor creation in `App.jsx`
-2. Replace the placeholder `uploadToR2` function with real Cloudflare R2 upload logic
-3. Add a feed that shows posts + images
-4. Deploy backend with `dfx` / `icp-cli`
+## Next Steps
+1. Create the real actor connection (canister ID + agent)
+2. Replace the placeholder R2 upload with real Cloudflare credentials
+3. Deploy the backend canister
+4. Add comments UI and profile pages
