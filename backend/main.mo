@@ -58,6 +58,8 @@ actor ScaleSpace {
   private var following = HashMap.HashMap<Principal, [Principal]>(0, Principal.equal, Principal.hash);
   private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
   private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  // Banned users cannot post, comment, like, love, or report
+  private var banned = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
 
   private let FREE_TIER_LIMIT : Nat = 20;
   private let DAILY_LIMIT : Nat = 5;
@@ -72,6 +74,13 @@ actor ScaleSpace {
 
   private func isMaster(p : Principal) : Bool {
     not Principal.isAnonymous(owner) and Principal.equal(owner, p)
+  };
+
+  private func isBannedUser(p : Principal) : Bool {
+    switch (banned.get(p)) {
+      case (?true) { true };
+      case _ { false };
+    }
   };
 
   private func getUserBalance(user : Principal) : UserBalance {
@@ -222,8 +231,6 @@ actor ScaleSpace {
     }
   };
 
-  /// Master only: restore a hidden post to the public feed.
-  /// Clears reports so it does not immediately re-hide at the threshold.
   public shared(msg) func adminUnhidePost(postId : Nat) : async Bool {
     if (not isMaster(msg.caller)) { return false };
 
@@ -248,6 +255,40 @@ actor ScaleSpace {
     }
   };
 
+  /// Master only: ban a user from posting, commenting, liking, loving, reporting.
+  /// Cannot ban yourself (the master).
+  public shared(msg) func adminBanUser(user : Principal) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+    if (Principal.equal(user, msg.caller)) { return "You cannot ban yourself" };
+    if (isMaster(user)) { return "Cannot ban the master profile" };
+
+    banned.put(user, true);
+    "User banned"
+  };
+
+  /// Master only: remove a ban
+  public shared(msg) func adminUnbanUser(user : Principal) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+
+    banned.delete(user);
+    "User unbanned"
+  };
+
+  public query func isBanned(user : Principal) : async Bool {
+    isBannedUser(user)
+  };
+
+  /// Master only: list banned principals
+  public query(msg) func getBannedUsers() : async [Principal] {
+    if (not isMaster(msg.caller)) { return [] };
+
+    let buf = Buffer.Buffer<Principal>(0);
+    for ((p, flag) in banned.entries()) {
+      if (flag) { buf.add(p) };
+    };
+    Buffer.toArray(buf)
+  };
+
   public query(msg) func getReportedPosts() : async [Post] {
     if (not isMaster(msg.caller)) { return [] };
 
@@ -267,6 +308,7 @@ actor ScaleSpace {
   };
 
   public shared(msg) func setProfile(username : Text, bio : Text, avatarURL : Text) : async () {
+    if (isBannedUser(msg.caller)) { return };
     let profile : UserProfile = { username; bio; avatarURL };
     userProfiles.put(msg.caller, profile);
   };
@@ -276,6 +318,7 @@ actor ScaleSpace {
   };
 
   public shared(msg) func follow(target : Principal) : async () {
+    if (isBannedUser(msg.caller)) { return };
     if (Principal.equal(msg.caller, target)) { return };
 
     switch (following.get(msg.caller)) {
@@ -309,6 +352,8 @@ actor ScaleSpace {
   };
 
   public shared(msg) func subscribe(tokenAmount : Nat) : async () {
+    if (isBannedUser(msg.caller)) { return };
+
     let current = getUserBalance(msg.caller);
     let updated : UserBalance = {
       tokens = current.tokens + tokenAmount;
@@ -321,6 +366,7 @@ actor ScaleSpace {
   };
 
   public shared(msg) func spendTokens(amount : Nat) : async Bool {
+    if (isBannedUser(msg.caller)) { return false };
     if (amount == 0) { return true };
 
     var balance = getUserBalance(msg.caller);
@@ -366,6 +412,8 @@ actor ScaleSpace {
   public query func getTiers() : async [Nat] { TIERS };
 
   public shared(msg) func makePost(content : Text, imageURL : ?Text) : async ?Nat {
+    if (isBannedUser(msg.caller)) { return null };
+
     var balance = getUserBalance(msg.caller);
     balance := maybeReset(msg.caller, balance);
 
@@ -453,6 +501,8 @@ actor ScaleSpace {
   };
 
   public shared(msg) func reportPost(postId : Nat) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+
     switch (posts.get(postId)) {
       case null { return "Post not found" };
       case (?post) {
@@ -512,6 +562,8 @@ actor ScaleSpace {
   };
 
   public shared(msg) func likePost(postId : Nat) : async Bool {
+    if (isBannedUser(msg.caller)) { return false };
+
     switch (posts.get(postId)) {
       case (?post) {
         if (post.isHidden) { return false };
@@ -534,6 +586,8 @@ actor ScaleSpace {
   };
 
   public shared(msg) func lovePost(postId : Nat) : async Bool {
+    if (isBannedUser(msg.caller)) { return false };
+
     switch (posts.get(postId)) {
       case (?post) {
         if (post.isHidden) { return false };
@@ -583,6 +637,7 @@ actor ScaleSpace {
   };
 
   public shared(msg) func addComment(postId : Nat, content : Text) : async ?Nat {
+    if (isBannedUser(msg.caller)) { return null };
     if (Text.size(content) > MAX_COMMENT_LENGTH) { return null };
 
     switch (posts.get(postId)) {
