@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ModerationQueue from "./ModerationQueue";
 import BanControls from "./BanControls";
+import SiteStats from "./SiteStats";
 
 export default function Profile({ actor, identity }) {
   const [username, setUsername] = useState("");
@@ -355,6 +356,8 @@ export default function Profile({ actor, identity }) {
             Only you can see and use these tools.
           </p>
 
+          <SiteStats actor={actor} />
+
           <div
             style={{
               marginBottom: "1.5rem",
@@ -439,25 +442,6 @@ export default function Profile({ actor, identity }) {
 
           {adminMsg && <p style={{ color: "#4ade80", marginTop: "1rem" }}>{adminMsg}</p>}
           {adminErr && <p style={{ color: "#f87171", marginTop: "1rem" }}>{adminErr}</p>}
-
-          <div
-            style={{
-              marginTop: "1.5rem",
-              paddingTop: "1rem",
-              borderTop: "1px solid #27272a",
-              fontSize: "0.8rem",
-              color: "#71717a",
-            }}
-          >
-            <p style={{ margin: "0 0 0.35rem 0" }}>As Founder you also get:</p>
-            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-              <li>No daily post limit</li>
-              <li>No token cost to post</li>
-              <li>512 character posts</li>
-              <li>Optional public Founder badge (cloak to hide it)</li>
-              <li>Moderation queue + ban / unban</li>
-            </ul>
-          </div>
         </div>
       )}
     </div>
