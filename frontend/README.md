@@ -1,30 +1,25 @@
 # ScaleSpace Frontend
 
-## Image handling (hybrid)
+## Posts (launch version)
 
-Users can add **one image** to a post in two ways:
+Posts are **text only** for the initial launch.
 
-1. **Paste their own public image URL**  
-   (IPFS, Arweave, personal Cloudflare R2, Google Drive public link, Imgur, etc.)
+- Free tier: 115 characters
+- Paid tiers: 512 characters
 
-2. **Upload a file** to ScaleSpace’s Cloudflare R2 bucket (more reliable)
+Image support (paste URL and/or upload) is planned for a future update. The backend already accepts an optional image URL, so this can be re-enabled without a backend redesign.
 
-The backend only stores the final URL string — it never stores the image data itself.
+## Stack
 
-### Cloudflare R2 setup (for the upload option)
-1. Create an R2 bucket.
-2. Make it publicly readable (or use a custom domain).
-3. Create an API token with Object Read & Write.
-4. Add these to a `.env` file (never commit secrets):
+- React
+- Internet Identity (`@dfinity/auth-client`)
+- Dark theme UI
 
-```
-VITE_R2_ACCOUNT_ID=...
-VITE_R2_ACCESS_KEY_ID=...
-VITE_R2_SECRET_ACCESS_KEY=...
-VITE_R2_BUCKET=scalespace-images
-VITE_R2_PUBLIC_URL=https://pub-xxxxx.r2.dev
-```
+## Main screens
 
-Then replace the placeholder `uploadToR2` function in `src/PostForm.jsx` with real upload logic (signed URL is recommended).
-
-You can later switch the upload destination to Arweave without changing the backend.
+- Feed + search
+- Post form
+- Profile (edit yours)
+- Public user profiles
+- Subscribe / get tokens
+- Comments, likes, loves, follow/unfollow, report
