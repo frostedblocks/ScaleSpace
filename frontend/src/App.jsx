@@ -83,6 +83,7 @@ export default function App() {
         <>
           <PostForm
             actor={actor}
+            principal={identity.getPrincipal()}
             onPostCreated={() => window.location.reload()}
           />
 
