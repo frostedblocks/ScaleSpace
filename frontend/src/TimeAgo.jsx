@@ -1,13 +1,8 @@
 import React from "react";
 
-/**
- * Converts a nanosecond timestamp from the ICP backend
- * into a human-readable relative time (e.g. "3 hours ago").
- */
 export default function TimeAgo({ timestamp }) {
   if (!timestamp) return null;
 
-  // ICP Time.now() returns nanoseconds since Unix epoch
   const ms = Number(timestamp) / 1_000_000;
   const now = Date.now();
   const diff = Math.max(0, now - ms);
@@ -28,7 +23,7 @@ export default function TimeAgo({ timestamp }) {
   }
 
   return (
-    <span style={{ fontSize: "0.8rem", color: "#888" }} title={new Date(ms).toLocaleString()}>
+    <span style={{ fontSize: "0.8rem", color: "#71717a" }} title={new Date(ms).toLocaleString()}>
       {text}
     </span>
   );
