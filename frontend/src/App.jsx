@@ -6,12 +6,14 @@ import Subscribe from "./Subscribe";
 import Profile from "./Profile";
 import TokenBalance from "./TokenBalance";
 import UserProfileView from "./UserProfileView";
+import Messaging from "./Messaging";
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
   const [identity, setIdentity] = useState(null);
-  const [actor, setActor] = useState(null);
-  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile" | "user"
+  const [actor, setActor] = useState(null); // main ScaleSpace canister
+  const [messagingActor, setMessagingActor] = useState(null); // messaging canister
+  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile" | "user" | "messages"
   const [viewingPrincipal, setViewingPrincipal] = useState(null);
 
   useEffect(() => {
@@ -20,8 +22,9 @@ export default function App() {
       if (await client.isAuthenticated()) {
         const id = client.getIdentity();
         setIdentity(id);
-        // TODO: create the real actor here with your canister ID
-        // setActor(createActor(canisterId, { agentOptions: { identity: id } }));
+        // TODO: create real actors with canister IDs
+        // setActor(createActor(mainCanisterId, { agentOptions: { identity: id } }));
+        // setMessagingActor(createMessagingActor(messagingCanisterId, { agentOptions: { identity: id } }));
       }
     });
   }, []);
@@ -40,6 +43,7 @@ export default function App() {
     await authClient.logout();
     setIdentity(null);
     setActor(null);
+    setMessagingActor(null);
     setView("feed");
     setViewingPrincipal(null);
   };
@@ -47,6 +51,11 @@ export default function App() {
   const openUserProfile = (principal) => {
     setViewingPrincipal(principal);
     setView("user");
+  };
+
+  const goFeed = () => {
+    setView("feed");
+    setViewingPrincipal(null);
   };
 
   return (
@@ -72,10 +81,7 @@ export default function App() {
         >
           <h1
             style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa" }}
-            onClick={() => {
-              setView("feed");
-              setViewingPrincipal(null);
-            }}
+            onClick={goFeed}
           >
             ScaleSpace
           </h1>
@@ -84,6 +90,9 @@ export default function App() {
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
               <TokenBalance actor={actor} principal={identity.getPrincipal()} />
 
+              <button onClick={() => setView("messages")} style={btnStyle}>
+                Messages
+              </button>
               <button onClick={() => setView("profile")} style={btnStyle}>
                 Profile
               </button>
@@ -124,15 +133,19 @@ export default function App() {
           <Subscribe actor={actor} />
         ) : view === "profile" ? (
           <Profile actor={actor} identity={identity} />
+        ) : view === "messages" ? (
+          <Messaging
+            mainActor={actor}
+            messagingActor={messagingActor}
+            identity={identity}
+            onBack={goFeed}
+          />
         ) : view === "user" && viewingPrincipal ? (
           <UserProfileView
             actor={actor}
             principal={viewingPrincipal}
             currentUserPrincipal={identity.getPrincipal()}
-            onBack={() => {
-              setView("feed");
-              setViewingPrincipal(null);
-            }}
+            onBack={goFeed}
           />
         ) : (
           <>
