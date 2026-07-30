@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 
 /**
  * Displays a user's avatar + username.
- * Falls back to a short principal if no profile is set.
+ * Clicking opens their public profile (if onClick is provided).
  */
-export default function Username({ actor, principal, size = 28 }) {
+export default function Username({ actor, principal, size = 28, onClick }) {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
@@ -27,8 +27,24 @@ export default function Username({ actor, principal, size = 28 }) {
   const name = profile?.username || null;
   const avatarURL = profile?.avatarURL || null;
 
+  const handleClick = (e) => {
+    if (onClick) {
+      e.stopPropagation();
+      onClick(principal);
+    }
+  };
+
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+    <span
+      onClick={handleClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.45rem",
+        cursor: onClick ? "pointer" : "default",
+      }}
+      title={onClick ? "View profile" : undefined}
+    >
       {/* Avatar */}
       {avatarURL ? (
         <img
