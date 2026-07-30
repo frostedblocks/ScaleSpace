@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "canisters": {
+    "scalespace": {
+      "type": "motoko",
+      "main": "backend/main.mo",
+      "declarations": {
+        "output": "frontend/src/declarations/scalespace",
+        "bindings": ["js", "ts", "did"]
+      }
+    },
+    "messaging": {
+      "type": "motoko",
+      "main": "messaging/main.mo",
+      "declarations": {
+        "output": "frontend/src/declarations/messaging",
+        "bindings": ["js", "ts", "did"]
+      }
+    },
+    "assets": {
+      "type": "assets",
+      "source": ["frontend/dist"],
+      "dependencies": ["scalespace", "messaging"]
+    }
+  },
+  "defaults": {
+    "build": {
+      "packtool": ""
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:4943",
+      "type": "ephemeral"
+    },
+    "ic": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
+    }
+  },
+  "output_env_file": "frontend/.env.local"
+}
