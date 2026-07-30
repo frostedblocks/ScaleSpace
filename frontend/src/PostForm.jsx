@@ -16,6 +16,8 @@ export default function PostForm({ actor, onPostCreated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const MAX_LENGTH = 10000;
+
   // ---------- URL mode ----------
   const handleURLChange = (e) => {
     const url = e.target.value.trim();
@@ -47,16 +49,11 @@ export default function PostForm({ actor, onPostCreated }) {
     setError("");
   };
 
-  /**
-   * Placeholder for real Cloudflare R2 upload.
-   * Replace this with signed-URL or AWS SDK logic.
-   */
   async function uploadToR2(file) {
     console.warn("Using placeholder R2 upload. Replace with real logic.");
     return `https://your-r2-bucket.example.com/${Date.now()}-${file.name}`;
   }
 
-  // Basic check that a pasted URL looks like an image
   function isProbablyImageURL(url) {
     if (!url) return false;
     try {
@@ -95,7 +92,6 @@ export default function PostForm({ actor, onPostCreated }) {
         finalImageURL = await uploadToR2(imageFile);
       }
 
-      // Call Motoko backend: makePost(content, imageURL)
       const result = await actor.makePost(
         content,
         finalImageURL ? [finalImageURL] : []
@@ -116,6 +112,9 @@ export default function PostForm({ actor, onPostCreated }) {
     }
   };
 
+  const remaining = MAX_LENGTH - content.length;
+  const counterColor = remaining < 100 ? "#c00" : remaining < 500 ? "#b45309" : "#888";
+
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: "2rem" }}>
       <textarea
@@ -123,9 +122,14 @@ export default function PostForm({ actor, onPostCreated }) {
         onChange={(e) => setContent(e.target.value)}
         placeholder="What's on your mind?"
         rows={4}
-        maxLength={10000}
+        maxLength={MAX_LENGTH}
         style={{ width: "100%", padding: "0.75rem" }}
       />
+
+      {/* Character counter */}
+      <div style={{ textAlign: "right", fontSize: "0.8rem", color: counterColor, marginTop: "0.25rem" }}>
+        {content.length.toLocaleString()} / {MAX_LENGTH.toLocaleString()}
+      </div>
 
       {/* Image section */}
       <div style={{ marginTop: "1rem", border: "1px solid #ddd", padding: "1rem", borderRadius: "8px" }}>
@@ -145,7 +149,6 @@ export default function PostForm({ actor, onPostCreated }) {
           </div>
         ) : (
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            {/* Option 1: Paste URL */}
             <div style={{ flex: 1, minWidth: "200px" }}>
               <label style={{ display: "block", marginBottom: "0.25rem" }}>
                 Paste your own image URL
@@ -165,7 +168,6 @@ export default function PostForm({ actor, onPostCreated }) {
 
             <div style={{ alignSelf: "center", color: "#999" }}>or</div>
 
-            {/* Option 2: Upload to R2 */}
             <div style={{ flex: 1, minWidth: "180px" }}>
               <label style={{ display: "block", marginBottom: "0.25rem" }}>
                 Upload to ScaleSpace storage
