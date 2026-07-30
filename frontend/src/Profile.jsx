@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ModerationQueue from "./ModerationQueue";
 
 export default function Profile({ actor, identity }) {
   const [username, setUsername] = useState("");
@@ -353,7 +354,6 @@ export default function Profile({ actor, identity }) {
             Only you can see and use these tools.
           </p>
 
-          {/* Cloak */}
           <div
             style={{
               marginBottom: "1.5rem",
@@ -392,6 +392,9 @@ export default function Profile({ actor, identity }) {
             </div>
           </div>
 
+          {/* Moderation queue */}
+          <ModerationQueue actor={actor} />
+
           <form onSubmit={handleGrantTokens} style={{ marginBottom: "1.5rem" }}>
             <label style={labelStyle}>Grant tokens to a user</label>
             <input
@@ -416,7 +419,7 @@ export default function Profile({ actor, identity }) {
           </form>
 
           <form onSubmit={handleHidePost}>
-            <label style={labelStyle}>Hide a post by ID</label>
+            <label style={labelStyle}>Hide a post by ID (manual)</label>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <input
                 type="number"
@@ -430,9 +433,6 @@ export default function Profile({ actor, identity }) {
                 {adminBusy ? "Working…" : "Hide post"}
               </button>
             </div>
-            <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.8rem", color: "#71717a" }}>
-              Post IDs are numbers (0, 1, 2…). Hidden posts leave the public feed.
-            </p>
           </form>
 
           {adminMsg && <p style={{ color: "#4ade80", marginTop: "1rem" }}>{adminMsg}</p>}
@@ -453,6 +453,7 @@ export default function Profile({ actor, identity }) {
               <li>No token cost to post</li>
               <li>512 character posts</li>
               <li>Optional public Founder badge (cloak to hide it)</li>
+              <li>Moderation queue for reported posts</li>
             </ul>
           </div>
         </div>
