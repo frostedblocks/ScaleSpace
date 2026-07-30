@@ -1,46 +1,91 @@
 # ScaleSpace
 
-Decentralized interest-based community platform on the Internet Computer Protocol (ICP).
+Decentralized social platform on the **Internet Computer**.
 
-## Current Features
+## Test on Ubuntu (local ICP replica)
 
-### Backend (Motoko)
-- Free tier: 20 posts per month
-- Daily rate limit: 5 posts per day
-- Paid tiers: 200 / 400 / 600 tokens
-- 5 tokens per post (after free tier)
-- Love button: 2 tokens (1 burns, 1 tips the creator)
-- Like button: free
-- Comments
-- User profiles (username, bio, avatar URL)
-- Follow system
-- Keyword search
-- Report system (post is hidden after 5 unique reports)
-- Posts support one optional image (URL only – stored off-chain)
+### 1. Install tools (once)
 
-### Frontend
-- Internet Identity login
-- Post form with hybrid image support (paste URL **or** upload to Cloudflare R2)
-- Feed that shows recent posts
-- Post cards with Like, Love, and Report buttons
+```bash
+# Node.js 20+
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-## Project Structure
-```
-backend/
-  main.mo
-frontend/
-  src/
-    App.jsx          ← main app (login + form + feed)
-    PostForm.jsx     ← create post + image
-    Feed.jsx         ← loads and displays posts
-    PostCard.jsx     ← single post with actions
-    ReportButton.jsx ← report a post
-  package.json
-  README.md
+# DFX (Internet Computer SDK)
+sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+# then restart the terminal, or:
+source "$HOME/.local/share/dfx/env"
 ```
 
-## Next Steps
-1. Create the real actor connection (canister ID + agent)
-2. Replace the placeholder R2 upload with real Cloudflare credentials
-3. Deploy the backend canister
-4. Add comments UI and profile pages
+### 2. Clone and enter the project
+
+```bash
+git clone https://github.com/frostedblocks/ScaleSpace.git
+cd ScaleSpace
+```
+
+### 3. Start local replica + deploy canisters
+
+```bash
+dfx start --background
+dfx deploy scalespace
+dfx deploy messaging
+# or simply:
+dfx deploy
+```
+
+This builds Motoko, installs canisters, and generates JS declarations under `frontend/src/declarations/`.
+
+### 4. Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (usually `http://localhost:3000`).
+
+Login with **Internet Identity** → claim master profile on the Profile page.
+
+### 5. Useful commands
+
+```bash
+# Canister IDs
+dfx canister id scalespace
+dfx canister id messaging
+
+# Rebuild after Motoko changes
+dfx deploy scalespace
+
+# Stop local network
+dfx stop
+```
+
+## Deploy to mainnet (IC)
+
+```bash
+# Needs cycles on your identity
+dfx identity use <your-identity>
+dfx deploy scalespace --network ic
+dfx deploy messaging --network ic
+cd frontend && npm run build
+dfx deploy assets --network ic
+```
+
+Set `DFX_NETWORK=ic` when building the frontend for mainnet.
+
+## Project layout
+
+```
+backend/main.mo      → scalespace canister (posts, tokens, master tools)
+messaging/main.mo    → messaging canister
+frontend/            → React + Vite UI
+dfx.json             → canister config
+```
+
+## Notes
+
+- **Payments** start in test mode (free token subscribe). Enable live ICP pricing from Master controls when ready.
+- Image upload is deferred; avatar/image fields accept URLs only for now.
+- Master profile: first logged-in user can **Claim Master Profile** on the Profile page.
