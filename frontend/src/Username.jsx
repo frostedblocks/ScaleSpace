@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from "react";
 
 /**
- * Avatar + username. Shows a Founder badge for the master profile.
+ * Avatar + username. Shows Founder badge only when master is not cloaked.
  */
 export default function Username({ actor, principal, size = 28, onClick }) {
   const [profile, setProfile] = useState(null);
-  const [isMaster, setIsMaster] = useState(false);
+  const [isMasterVisible, setIsMasterVisible] = useState(false);
 
   useEffect(() => {
     if (!actor || !principal) return;
 
     const load = async () => {
       try {
-        const [profileResult, ownerFlag] = await Promise.all([
+        const [profileResult, visible] = await Promise.all([
           actor.getProfile(principal),
-          actor.isOwner(principal),
+          actor.isOwnerVisible(principal),
         ]);
         if (profileResult && profileResult.length > 0) {
           setProfile(profileResult[0]);
         }
-        setIsMaster(!!ownerFlag);
+        setIsMasterVisible(!!visible);
       } catch (err) {
         // silent fail
       }
@@ -58,7 +58,7 @@ export default function Username({ actor, principal, size = 28, onClick }) {
             height: size,
             borderRadius: "50%",
             objectFit: "cover",
-            border: isMaster ? "2px solid #fbbf24" : "1px solid #3f3f46",
+            border: isMasterVisible ? "2px solid #fbbf24" : "1px solid #3f3f46",
             background: "#27272a",
           }}
           onError={(e) => {
@@ -71,13 +71,13 @@ export default function Username({ actor, principal, size = 28, onClick }) {
             width: size,
             height: size,
             borderRadius: "50%",
-            background: isMaster ? "#422006" : "#27272a",
-            border: isMaster ? "2px solid #fbbf24" : "1px solid #3f3f46",
+            background: isMasterVisible ? "#422006" : "#27272a",
+            border: isMasterVisible ? "2px solid #fbbf24" : "1px solid #3f3f46",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: size * 0.4,
-            color: isMaster ? "#fbbf24" : "#71717a",
+            color: isMasterVisible ? "#fbbf24" : "#71717a",
             flexShrink: 0,
           }}
         >
@@ -86,7 +86,7 @@ export default function Username({ actor, principal, size = 28, onClick }) {
       )}
 
       {name ? (
-        <span style={{ fontWeight: 500, color: isMaster ? "#fde68a" : "#fafafa" }}>
+        <span style={{ fontWeight: 500, color: isMasterVisible ? "#fde68a" : "#fafafa" }}>
           {name}
         </span>
       ) : (
@@ -95,7 +95,7 @@ export default function Username({ actor, principal, size = 28, onClick }) {
         </span>
       )}
 
-      {isMaster && (
+      {isMasterVisible && (
         <span
           style={{
             fontSize: "0.65rem",
