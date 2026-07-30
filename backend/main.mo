@@ -57,11 +57,35 @@ actor ScaleSpace {
     tokensInCirculation : Nat;
   };
 
+  type Limits = {
+    freeTierLimit : Nat;
+    dailyLimit : Nat;
+    tokensPerPost : Nat;
+    tokensPerLove : Nat;
+    tokensPerMessage : Nat;
+    freeMaxLength : Nat;
+    paidMaxLength : Nat;
+    maxCommentLength : Nat;
+    reportsToHide : Nat;
+  };
+
   private stable var nextPostId : Nat = 0;
   private stable var nextCommentId : Nat = 0;
 
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
   private stable var ownerCloaked : Bool = false;
+
+  // Live-adjustable limits (master can change without redeploy)
+  private stable var freeTierLimit : Nat = 20;
+  private stable var dailyLimit : Nat = 5;
+  private stable var tokensPerPost : Nat = 5;
+  private stable var tokensPerLove : Nat = 2;
+  private stable var tokensPerMessage : Nat = 1;
+  private stable var freeMaxLength : Nat = 115;
+  private stable var paidMaxLength : Nat = 512;
+  private stable var maxCommentLength : Nat = 2000;
+  private stable var reportsToHide : Nat = 5;
+  private stable var tiers : [Nat] = [200, 400, 600];
 
   private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
   private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
@@ -72,17 +96,6 @@ actor ScaleSpace {
   private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
   private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
   private var banned = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
-
-  private let FREE_TIER_LIMIT : Nat = 20;
-  private let DAILY_LIMIT : Nat = 5;
-  private let TOKENS_PER_POST : Nat = 5;
-  private let TOKENS_PER_LOVE : Nat = 2;
-  private let TOKENS_PER_MESSAGE : Nat = 1;
-  private let FREE_MAX_LENGTH : Nat = 115;
-  private let PAID_MAX_LENGTH : Nat = 512;
-  private let MAX_COMMENT_LENGTH : Nat = 2000;
-  private let TIERS : [Nat] = [200, 400, 600];
-  private let REPORTS_TO_HIDE : Nat = 5;
 
   private func isMaster(p : Principal) : Bool {
     not Principal.isAnonymous(owner) and Principal.equal(owner, p)
@@ -170,12 +183,11 @@ actor ScaleSpace {
     owner := msg.caller;
     ownerCloaked := false;
 
-    let profile : UserProfile = {
+    userProfiles.put(msg.caller, {
       username = "ScaleSpace";
       bio = "Founder of ScaleSpace — a quieter place for real conversation.";
       avatarURL = "";
-    };
-    userProfiles.put(msg.caller, profile);
+    });
 
     let bal = getUserBalance(msg.caller);
     userBalances.put(msg.caller, {
@@ -200,6 +212,55 @@ actor ScaleSpace {
     if (not isMaster(msg.caller)) { return false };
     ownerCloaked := cloaked;
     true
+  };
+
+  /// Public: current limits (frontend can show correct counters)
+  public query func getLimits() : async Limits {
+    {
+      freeTierLimit = freeTierLimit;
+      dailyLimit = dailyLimit;
+      tokensPerPost = tokensPerPost;
+      tokensPerLove = tokensPerLove;
+      tokensPerMessage = tokensPerMessage;
+      freeMaxLength = freeMaxLength;
+      paidMaxLength = paidMaxLength;
+      maxCommentLength = maxCommentLength;
+      reportsToHide = reportsToHide;
+    }
+  };
+
+  /// Master only: update limits live (no redeploy)
+  public shared(msg) func adminSetLimits(
+    freeTierLimit_ : Nat,
+    dailyLimit_ : Nat,
+    tokensPerPost_ : Nat,
+    tokensPerLove_ : Nat,
+    tokensPerMessage_ : Nat,
+    freeMaxLength_ : Nat,
+    paidMaxLength_ : Nat,
+    maxCommentLength_ : Nat,
+    reportsToHide_ : Nat
+  ) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+
+    if (freeMaxLength_ == 0 or paidMaxLength_ == 0 or maxCommentLength_ == 0) {
+      return "Character limits must be at least 1";
+    };
+    if (reportsToHide_ == 0) {
+      return "Reports to hide must be at least 1";
+    };
+
+    freeTierLimit := freeTierLimit_;
+    dailyLimit := dailyLimit_;
+    tokensPerPost := tokensPerPost_;
+    tokensPerLove := tokensPerLove_;
+    tokensPerMessage := tokensPerMessage_;
+    freeMaxLength := freeMaxLength_;
+    paidMaxLength := paidMaxLength_;
+    maxCommentLength := maxCommentLength_;
+    reportsToHide := reportsToHide_;
+
+    "Limits updated"
   };
 
   public shared(msg) func adminGrantTokens(to : Principal, amount : Nat) : async Bool {
@@ -286,7 +347,6 @@ actor ScaleSpace {
     Buffer.toArray(buf)
   };
 
-  /// Master only: aggregate site statistics
   public query(msg) func getSiteStats() : async SiteStats {
     if (not isMaster(msg.caller)) {
       return {
@@ -423,7 +483,7 @@ actor ScaleSpace {
     true
   };
 
-  public query func getTokensPerMessage() : async Nat { TOKENS_PER_MESSAGE };
+  public query func getTokensPerMessage() : async Nat { tokensPerMessage };
 
   public query func getUserStats(user : Principal) : async ?{
     tokens : Nat;
@@ -438,26 +498,26 @@ actor ScaleSpace {
           tokens = current.tokens;
           postsThisMonth = current.postsThisMonth;
           postsToday = current.postsToday;
-          isFreeTier = current.postsThisMonth < FREE_TIER_LIMIT;
+          isFreeTier = current.postsThisMonth < freeTierLimit;
         }
       };
       case null { null };
     }
   };
 
-  public query func getTiers() : async [Nat] { TIERS };
+  public query func getTiers() : async [Nat] { tiers };
 
   public shared(msg) func makePost(content : Text, imageURL : ?Text) : async ?Nat {
     if (isBannedUser(msg.caller)) { return null };
     var balance = getUserBalance(msg.caller);
     balance := maybeReset(msg.caller, balance);
     let master = isMaster(msg.caller);
-    let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
-    let maxLength = if (master or not isFree) { PAID_MAX_LENGTH } else { FREE_MAX_LENGTH };
+    let isFree = balance.postsThisMonth < freeTierLimit;
+    let maxLength = if (master or not isFree) { paidMaxLength } else { freeMaxLength };
     if (Text.size(content) > maxLength) { return null };
     if (not master) {
-      if (balance.postsToday >= DAILY_LIMIT) { return null };
-      if (not isFree and balance.tokens < TOKENS_PER_POST) { return null };
+      if (balance.postsToday >= dailyLimit) { return null };
+      if (not isFree and balance.tokens < tokensPerPost) { return null };
     };
     let postId = nextPostId;
     nextPostId += 1;
@@ -473,7 +533,7 @@ actor ScaleSpace {
       isHidden = false;
     });
     indexPost(postId, content);
-    let newTokens = if (master or isFree) { balance.tokens } else { balance.tokens - TOKENS_PER_POST };
+    let newTokens = if (master or isFree) { balance.tokens } else { balance.tokens - tokensPerPost };
     userBalances.put(msg.caller, {
       tokens = newTokens;
       postsThisMonth = balance.postsThisMonth + 1;
@@ -539,7 +599,7 @@ actor ScaleSpace {
             let newReporters = Array.append(reporters, [msg.caller]);
             reports.put(postId, newReporters);
             let newCount = newReporters.size();
-            let shouldHide = newCount >= REPORTS_TO_HIDE;
+            let shouldHide = newCount >= reportsToHide;
             posts.put(postId, {
               id = post.id;
               author = post.author;
@@ -606,9 +666,9 @@ actor ScaleSpace {
         if (post.isHidden) { return false };
         var balance = getUserBalance(msg.caller);
         balance := maybeReset(msg.caller, balance);
-        if (balance.tokens < TOKENS_PER_LOVE) { return false };
+        if (balance.tokens < tokensPerLove) { return false };
         userBalances.put(msg.caller, {
-          tokens = balance.tokens - TOKENS_PER_LOVE;
+          tokens = balance.tokens - tokensPerLove;
           postsThisMonth = balance.postsThisMonth;
           postsToday = balance.postsToday;
           lastReset = balance.lastReset;
@@ -641,7 +701,7 @@ actor ScaleSpace {
 
   public shared(msg) func addComment(postId : Nat, content : Text) : async ?Nat {
     if (isBannedUser(msg.caller)) { return null };
-    if (Text.size(content) > MAX_COMMENT_LENGTH) { return null };
+    if (Text.size(content) > maxCommentLength) { return null };
     switch (posts.get(postId)) {
       case null { return null };
       case (?p) { if (p.isHidden) { return null } };
