@@ -3,6 +3,7 @@ import ReportButton from "./ReportButton";
 import Comments from "./Comments";
 import FollowButton from "./FollowButton";
 import Username from "./Username";
+import TimeAgo from "./TimeAgo";
 
 /**
  * PostCard used in the feed.
@@ -49,7 +50,7 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
         background: "#fff",
       }}
     >
-      {/* Author + Follow button */}
+      {/* Author + time + Follow button */}
       <div
         style={{
           display: "flex",
@@ -58,8 +59,11 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
           marginBottom: "0.5rem",
         }}
       >
-        <div style={{ fontSize: "0.95rem" }}>
-          <Username actor={actor} principal={post.author} />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.95rem" }}>
+            <Username actor={actor} principal={post.author} />
+          </span>
+          <TimeAgo timestamp={post.timestamp} />
         </div>
 
         <FollowButton
