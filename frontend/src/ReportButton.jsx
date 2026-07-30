@@ -1,9 +1,5 @@
 import React, { useState } from "react";
 
-/**
- * Simple Report button for posts.
- * Calls the backend reportPost(postId) method.
- */
 export default function ReportButton({ actor, postId }) {
   const [status, setStatus] = useState(""); // "", "loading", "done", "error"
   const [message, setMessage] = useState("");
@@ -25,7 +21,7 @@ export default function ReportButton({ actor, postId }) {
       setStatus("done");
     } catch (err) {
       console.error(err);
-      setMessage("Failed to report. Please try again.");
+      setMessage("Failed to report.");
       setStatus("error");
     }
   };
@@ -37,11 +33,11 @@ export default function ReportButton({ actor, postId }) {
         disabled={status === "loading" || status === "done"}
         style={{
           background: "none",
-          border: "1px solid #ccc",
-          borderRadius: "4px",
-          padding: "2px 8px",
+          border: "1px solid #3f3f46",
+          borderRadius: "6px",
+          padding: "0.2rem 0.6rem",
           fontSize: "0.8rem",
-          color: status === "done" ? "#888" : "#c00",
+          color: status === "done" ? "#52525b" : "#f87171",
           cursor: status === "loading" || status === "done" ? "default" : "pointer",
         }}
       >
@@ -49,7 +45,7 @@ export default function ReportButton({ actor, postId }) {
       </button>
 
       {message && (
-        <span style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#555" }}>
+        <span style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#a1a1aa" }}>
           {message}
         </span>
       )}
