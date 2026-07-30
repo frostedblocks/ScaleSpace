@@ -1,9 +1,5 @@
 import React, { useState } from "react";
 
-/**
- * Subscribe / Buy Tokens screen
- * Lets the user choose one of the three paid tiers: 200, 400, or 600 tokens.
- */
 export default function Subscribe({ actor, onSuccess }) {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -24,9 +20,8 @@ export default function Subscribe({ actor, onSuccess }) {
     setMessage("");
 
     try {
-      // Call the backend subscribe function
       await actor.subscribe(selected);
-      setMessage(`Successfully added ${selected} tokens to your account!`);
+      setMessage(`Successfully added ${selected} tokens!`);
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error(err);
@@ -37,32 +32,41 @@ export default function Subscribe({ actor, onSuccess }) {
   };
 
   return (
-    <div style={{ marginBottom: "2rem" }}>
-      <h2 style={{ marginTop: 0 }}>Get Tokens</h2>
-      <p style={{ color: "#555", marginBottom: "1.25rem" }}>
-        Free users get 20 posts per month. After that, each post costs 5 tokens.
+    <div>
+      <h2 style={{ marginTop: 0, color: "#fafafa" }}>Get Tokens</h2>
+      <p style={{ color: "#a1a1aa", marginBottom: "1.5rem", lineHeight: 1.5 }}>
+        Free users get 20 posts per month (115 characters each).<br />
+        After that, each post costs 5 tokens and can be up to 512 characters.
       </p>
 
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
-        {tiers.map((tier) => (
-          <button
-            key={tier.amount}
-            onClick={() => setSelected(tier.amount)}
-            style={{
-              flex: "1 1 140px",
-              padding: "1rem",
-              borderRadius: "10px",
-              border: selected === tier.amount ? "2px solid #2563eb" : "1px solid #ddd",
-              background: selected === tier.amount ? "#eff6ff" : "#fff",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: "1.1rem" }}>{tier.label}</div>
-            <div style={{ fontSize: "1.4rem", margin: "0.3rem 0" }}>{tier.amount} tokens</div>
-            <div style={{ fontSize: "0.85rem", color: "#666" }}>{tier.description}</div>
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap", marginBottom: "1.75rem" }}>
+        {tiers.map((tier) => {
+          const isSelected = selected === tier.amount;
+          return (
+            <button
+              key={tier.amount}
+              onClick={() => setSelected(tier.amount)}
+              style={{
+                flex: "1 1 140px",
+                padding: "1.1rem",
+                borderRadius: "12px",
+                border: isSelected ? "2px solid #2563eb" : "1px solid #3f3f46",
+                background: isSelected ? "#1e3a5f" : "#18181b",
+                cursor: "pointer",
+                textAlign: "left",
+                color: "#e4e4e7",
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: "1.05rem", color: "#fafafa" }}>
+                {tier.label}
+              </div>
+              <div style={{ fontSize: "1.35rem", margin: "0.35rem 0", color: "#60a5fa" }}>
+                {tier.amount} tokens
+              </div>
+              <div style={{ fontSize: "0.85rem", color: "#a1a1aa" }}>{tier.description}</div>
+            </button>
+          );
+        })}
       </div>
 
       <button
@@ -71,22 +75,21 @@ export default function Subscribe({ actor, onSuccess }) {
         style={{
           padding: "0.7rem 1.5rem",
           fontSize: "1rem",
-          background: selected ? "#2563eb" : "#ccc",
+          background: selected && !loading ? "#2563eb" : "#3f3f46",
           color: "white",
           border: "none",
-          borderRadius: "6px",
-          cursor: selected ? "pointer" : "default",
+          borderRadius: "8px",
+          cursor: selected && !loading ? "pointer" : "default",
         }}
       >
         {loading ? "Processing…" : selected ? `Get ${selected} Tokens` : "Select a plan"}
       </button>
 
-      {message && <p style={{ color: "green", marginTop: "1rem" }}>{message}</p>}
-      {error && <p style={{ color: "crimson", marginTop: "1rem" }}>{error}</p>}
+      {message && <p style={{ color: "#4ade80", marginTop: "1rem" }}>{message}</p>}
+      {error && <p style={{ color: "#f87171", marginTop: "1rem" }}>{error}</p>}
 
-      <p style={{ fontSize: "0.8rem", color: "#888", marginTop: "1.5rem" }}>
-        Note: In a real version this would charge ICP or a credit card.
-        Right now it just adds the tokens for testing.
+      <p style={{ fontSize: "0.8rem", color: "#52525b", marginTop: "1.75rem" }}>
+        Note: Right now this just adds tokens for testing. Real payments can be added later.
       </p>
     </div>
   );
