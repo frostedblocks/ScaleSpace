@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import ReportButton from "./ReportButton";
 import Comments from "./Comments";
+import FollowButton from "./FollowButton";
 
 /**
  * PostCard used in the feed.
- * Shows content, optional image, like, love, report, and comments.
  */
-export default function PostCard({ post, actor }) {
+export default function PostCard({ post, actor, currentUserPrincipal }) {
   const [likes, setLikes] = useState(post.likes);
   const [loves, setLoves] = useState(post.loves);
   const [loading, setLoading] = useState(false);
@@ -48,15 +48,30 @@ export default function PostCard({ post, actor }) {
         background: "#fff",
       }}
     >
-      {/* Author */}
-      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.4rem" }}>
-        {post.author.toString().slice(0, 12)}…
+      {/* Author + Follow button */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+          {post.author.toString().slice(0, 12)}…
+        </div>
+
+        <FollowButton
+          actor={actor}
+          targetPrincipal={post.author}
+          currentUserPrincipal={currentUserPrincipal}
+        />
       </div>
 
       {/* Content */}
       <p style={{ margin: "0 0 0.75rem 0", whiteSpace: "pre-wrap" }}>{post.content}</p>
 
-      {/* Image (if any) */}
+      {/* Image */}
       {post.imageURL && post.imageURL.length > 0 && (
         <img
           src={post.imageURL[0]}
@@ -91,7 +106,6 @@ export default function PostCard({ post, actor }) {
         <ReportButton actor={actor} postId={post.id} />
       </div>
 
-      {/* Comments section */}
       {showComments && <Comments actor={actor} postId={post.id} />}
     </div>
   );
