@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from "react";
 
-/**
- * Follow / Unfollow button for another user.
- */
 export default function FollowButton({ actor, targetPrincipal, currentUserPrincipal }) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
 
-  // Don't show the button if it's the current user
   if (!targetPrincipal || !currentUserPrincipal) return null;
   if (targetPrincipal.toString() === currentUserPrincipal.toString()) return null;
 
@@ -54,11 +50,11 @@ export default function FollowButton({ actor, targetPrincipal, currentUserPrinci
       disabled={loading || isFollowing}
       style={{
         fontSize: "0.8rem",
-        padding: "2px 10px",
+        padding: "0.2rem 0.75rem",
         borderRadius: "12px",
-        border: isFollowing ? "1px solid #ccc" : "1px solid #2563eb",
-        background: isFollowing ? "#f3f4f6" : "#eff6ff",
-        color: isFollowing ? "#666" : "#2563eb",
+        border: isFollowing ? "1px solid #3f3f46" : "1px solid #2563eb",
+        background: isFollowing ? "#18181b" : "#1e3a5f",
+        color: isFollowing ? "#71717a" : "#93c5fd",
         cursor: isFollowing ? "default" : "pointer",
       }}
     >
