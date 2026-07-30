@@ -5,12 +5,14 @@ import Feed from "./Feed";
 import Subscribe from "./Subscribe";
 import Profile from "./Profile";
 import TokenBalance from "./TokenBalance";
+import UserProfileView from "./UserProfileView";
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [actor, setActor] = useState(null);
-  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile"
+  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile" | "user"
+  const [viewingPrincipal, setViewingPrincipal] = useState(null);
 
   useEffect(() => {
     AuthClient.create().then(async (client) => {
@@ -39,6 +41,12 @@ export default function App() {
     setIdentity(null);
     setActor(null);
     setView("feed");
+    setViewingPrincipal(null);
+  };
+
+  const openUserProfile = (principal) => {
+    setViewingPrincipal(principal);
+    setView("user");
   };
 
   return (
@@ -64,7 +72,10 @@ export default function App() {
         >
           <h1
             style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa" }}
-            onClick={() => setView("feed")}
+            onClick={() => {
+              setView("feed");
+              setViewingPrincipal(null);
+            }}
           >
             ScaleSpace
           </h1>
@@ -73,10 +84,7 @@ export default function App() {
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
               <TokenBalance actor={actor} principal={identity.getPrincipal()} />
 
-              <button
-                onClick={() => setView("profile")}
-                style={btnStyle}
-              >
+              <button onClick={() => setView("profile")} style={btnStyle}>
                 Profile
               </button>
               <button
@@ -116,6 +124,16 @@ export default function App() {
           <Subscribe actor={actor} />
         ) : view === "profile" ? (
           <Profile actor={actor} identity={identity} />
+        ) : view === "user" && viewingPrincipal ? (
+          <UserProfileView
+            actor={actor}
+            principal={viewingPrincipal}
+            currentUserPrincipal={identity.getPrincipal()}
+            onBack={() => {
+              setView("feed");
+              setViewingPrincipal(null);
+            }}
+          />
         ) : (
           <>
             <PostForm
@@ -129,6 +147,7 @@ export default function App() {
             <Feed
               actor={actor}
               currentUserPrincipal={identity.getPrincipal()}
+              onUserClick={openUserProfile}
             />
           </>
         )}
