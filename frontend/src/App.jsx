@@ -4,6 +4,7 @@ import PostForm from "./PostForm";
 import Feed from "./Feed";
 import Subscribe from "./Subscribe";
 import Profile from "./Profile";
+import TokenBalance from "./TokenBalance";
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
@@ -42,17 +43,16 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: "640px", margin: "2rem auto", fontFamily: "system-ui", padding: "0 1rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <h1 style={{ margin: 0, cursor: "pointer" }} onClick={() => setView("feed")}>
           ScaleSpace
         </h1>
 
         {identity && (
           <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              onClick={() => setView("profile")}
-              style={{ fontSize: "0.85rem" }}
-            >
+            <TokenBalance actor={actor} principal={identity.getPrincipal()} />
+
+            <button onClick={() => setView("profile")} style={{ fontSize: "0.85rem" }}>
               Profile
             </button>
             <button
@@ -81,10 +81,6 @@ export default function App() {
         <Profile actor={actor} identity={identity} />
       ) : (
         <>
-          <p style={{ fontSize: "0.85rem", color: "#666" }}>
-            Logged in as {identity.getPrincipal().toText().slice(0, 12)}…
-          </p>
-
           <PostForm
             actor={actor}
             onPostCreated={() => window.location.reload()}
