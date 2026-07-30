@@ -47,6 +47,9 @@ actor ScaleSpace {
   private stable var nextPostId : Nat = 0;
   private stable var nextCommentId : Nat = 0;
 
+  // Master profile owner – anonymous until claimed once via claimMasterProfile()
+  private stable var owner : Principal = Principal.fromText("aaaaa-aa");
+
   private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
   private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
   private var posts = HashMap.HashMap<Nat, Post>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
@@ -66,6 +69,10 @@ actor ScaleSpace {
   private let MAX_COMMENT_LENGTH : Nat = 2000;
   private let TIERS : [Nat] = [200, 400, 600];
   private let REPORTS_TO_HIDE : Nat = 5;
+
+  private func isMaster(p : Principal) : Bool {
+    not Principal.isAnonymous(owner) and Principal.equal(owner, p)
+  };
 
   private func getUserBalance(user : Principal) : UserBalance {
     switch (userBalances.get(user)) {
@@ -128,6 +135,94 @@ actor ScaleSpace {
     };
   };
 
+  // ==================== MASTER / OWNER ====================
+
+  /// Call this once while logged in with your Internet Identity.
+  /// First caller becomes the permanent master profile owner.
+  public shared(msg) func claimMasterProfile() : async Text {
+    if (Principal.isAnonymous(msg.caller)) {
+      return "You must be logged in";
+    };
+    if (not Principal.isAnonymous(owner)) {
+      if (Principal.equal(owner, msg.caller)) {
+        return "You already own the master profile";
+      };
+      return "Master profile already claimed";
+    };
+
+    owner := msg.caller;
+
+    // Default founder profile (you can edit later)
+    let profile : UserProfile = {
+      username = "ScaleSpace";
+      bio = "Founder of ScaleSpace — a quieter place for real conversation.";
+      avatarURL = "";
+    };
+    userProfiles.put(msg.caller, profile);
+
+    // Give the founder a starting token balance for testing ops
+    let bal = getUserBalance(msg.caller);
+    userBalances.put(msg.caller, {
+      tokens = bal.tokens + 1000;
+      postsThisMonth = bal.postsThisMonth;
+      postsToday = bal.postsToday;
+      lastReset = bal.lastReset;
+      lastDailyReset = bal.lastDailyReset;
+    });
+
+    "Master profile claimed successfully"
+  };
+
+  public query func getOwner() : async Principal {
+    owner
+  };
+
+  public query func isOwner(user : Principal) : async Bool {
+    isMaster(user)
+  };
+
+  /// Owner only: grant tokens to any user
+  public shared(msg) func adminGrantTokens(to : Principal, amount : Nat) : async Bool {
+    if (not isMaster(msg.caller)) { return false };
+    if (amount == 0) { return true };
+
+    let bal = getUserBalance(to);
+    userBalances.put(to, {
+      tokens = bal.tokens + amount;
+      postsThisMonth = bal.postsThisMonth;
+      postsToday = bal.postsToday;
+      lastReset = bal.lastReset;
+      lastDailyReset = bal.lastDailyReset;
+    });
+    true
+  };
+
+  /// Owner only: instantly hide a post
+  public shared(msg) func adminHidePost(postId : Nat) : async Bool {
+    if (not isMaster(msg.caller)) { return false };
+
+    switch (posts.get(postId)) {
+      case null { false };
+      case (?post) {
+        let updated : Post = {
+          id = post.id;
+          author = post.author;
+          content = post.content;
+          imageURL = post.imageURL;
+          timestamp = post.timestamp;
+          likes = post.likes;
+          loves = post.loves;
+          reportCount = post.reportCount;
+          isHidden = true;
+        };
+        posts.put(postId, updated);
+        true
+      };
+    }
+  };
+
+  // ==================== PROFILE ====================
+
   public shared(msg) func setProfile(username : Text, bio : Text, avatarURL : Text) : async () {
     let profile : UserProfile = { username; bio; avatarURL };
     userProfiles.put(msg.caller, profile);
@@ -182,7 +277,6 @@ actor ScaleSpace {
     userBalances.put(msg.caller, updated);
   };
 
-  /// Spend tokens (used for messaging, etc.). Returns false if not enough.
   public shared(msg) func spendTokens(amount : Nat) : async Bool {
     if (amount == 0) { return true };
 
@@ -234,16 +328,19 @@ actor ScaleSpace {
     var balance = getUserBalance(msg.caller);
     balance := maybeReset(msg.caller, balance);
 
+    let master = isMaster(msg.caller);
     let isFree = balance.postsThisMonth < FREE_TIER_LIMIT;
 
-    let maxLength = if (isFree) { FREE_MAX_LENGTH } else { PAID_MAX_LENGTH };
+    // Master can post longer (paid limit) and is not blocked by daily/free limits
+    let maxLength = if (master or not isFree) { PAID_MAX_LENGTH } else { FREE_MAX_LENGTH };
     if (Text.size(content) > maxLength) {
       return null;
     };
 
-    if (balance.postsToday >= DAILY_LIMIT) { return null };
-
-    if (not isFree and balance.tokens < TOKENS_PER_POST) { return null };
+    if (not master) {
+      if (balance.postsToday >= DAILY_LIMIT) { return null };
+      if (not isFree and balance.tokens < TOKENS_PER_POST) { return null };
+    };
 
     let postId = nextPostId;
     nextPostId += 1;
@@ -263,7 +360,7 @@ actor ScaleSpace {
     posts.put(postId, post);
     indexPost(postId, content);
 
-    let newTokens = if (isFree) { balance.tokens } else { balance.tokens - TOKENS_PER_POST };
+    let newTokens = if (master or isFree) { balance.tokens } else { balance.tokens - TOKENS_PER_POST };
     let updated : UserBalance = {
       tokens = newTokens;
       postsThisMonth = balance.postsThisMonth + 1;
