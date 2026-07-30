@@ -11,6 +11,8 @@ export default function Comments({ actor, postId }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const MAX_LENGTH = 2000;
+
   const loadComments = async () => {
     if (!actor) return;
     setLoading(true);
@@ -53,6 +55,9 @@ export default function Comments({ actor, postId }) {
     }
   };
 
+  const remaining = MAX_LENGTH - newComment.length;
+  const counterColor = remaining < 50 ? "#c00" : remaining < 200 ? "#b45309" : "#888";
+
   return (
     <div style={{ marginTop: "1rem", borderTop: "1px solid #eee", paddingTop: "0.75rem" }}>
       <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem" }}>Comments</h4>
@@ -89,16 +94,21 @@ export default function Comments({ actor, postId }) {
           onChange={(e) => setNewComment(e.target.value)}
           placeholder="Write a comment…"
           rows={2}
-          maxLength={2000}
+          maxLength={MAX_LENGTH}
           style={{ width: "100%", padding: "0.5rem", fontSize: "0.9rem" }}
         />
-        <button
-          type="submit"
-          disabled={submitting || !newComment.trim()}
-          style={{ marginTop: "0.4rem" }}
-        >
-          {submitting ? "Posting…" : "Add Comment"}
-        </button>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.35rem" }}>
+          <span style={{ fontSize: "0.8rem", color: counterColor }}>
+            {newComment.length} / {MAX_LENGTH}
+          </span>
+          <button
+            type="submit"
+            disabled={submitting || !newComment.trim()}
+          >
+            {submitting ? "Posting…" : "Add Comment"}
+          </button>
+        </div>
       </form>
 
       {error && <p style={{ color: "crimson", fontSize: "0.85rem" }}>{error}</p>}
