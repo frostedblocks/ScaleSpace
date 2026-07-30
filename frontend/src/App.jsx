@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AuthClient } from "@dfinity/auth-client";
+import { createScaleSpaceActor, createMessagingActor } from "./actors";
 import PostForm from "./PostForm";
 import Feed from "./Feed";
 import Subscribe from "./Subscribe";
@@ -11,10 +12,29 @@ import Messaging from "./Messaging";
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
   const [identity, setIdentity] = useState(null);
-  const [actor, setActor] = useState(null); // main ScaleSpace canister
-  const [messagingActor, setMessagingActor] = useState(null); // messaging canister
-  const [view, setView] = useState("feed"); // "feed" | "subscribe" | "profile" | "user" | "messages"
+  const [actor, setActor] = useState(null);
+  const [messagingActor, setMessagingActor] = useState(null);
+  const [view, setView] = useState("feed");
   const [viewingPrincipal, setViewingPrincipal] = useState(null);
+  const [bootError, setBootError] = useState("");
+  const [booting, setBooting] = useState(true);
+
+  const connectActors = async (id) => {
+    setBootError("");
+    try {
+      const [main, msg] = await Promise.all([
+        createScaleSpaceActor(id),
+        createMessagingActor(id),
+      ]);
+      setActor(main);
+      setMessagingActor(msg);
+    } catch (err) {
+      console.error(err);
+      setBootError(err.message || "Could not connect to canisters.");
+      setActor(null);
+      setMessagingActor(null);
+    }
+  };
 
   useEffect(() => {
     AuthClient.create().then(async (client) => {
@@ -22,19 +42,28 @@ export default function App() {
       if (await client.isAuthenticated()) {
         const id = client.getIdentity();
         setIdentity(id);
-        // TODO: create real actors with canister IDs
-        // setActor(createActor(mainCanisterId, { agentOptions: { identity: id } }));
-        // setMessagingActor(createMessagingActor(messagingCanisterId, { agentOptions: { identity: id } }));
+        await connectActors(id);
       }
+      setBooting(false);
     });
   }, []);
 
   const login = async () => {
+    if (!authClient) return;
+
+    const network = import.meta.env.DFX_NETWORK || "local";
+    // Local II for replica testing; production II on mainnet
+    const identityProvider =
+      network === "ic"
+        ? "https://identity.ic0.app"
+        : `http://${import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || "rdmx6-jaaaa-aaaaa-aaadq-cai"}.localhost:4943`;
+
     await authClient.login({
-      identityProvider: "https://identity.ic0.app",
+      identityProvider: network === "ic" ? "https://identity.ic0.app" : "https://identity.ic0.app",
       onSuccess: async () => {
         const id = authClient.getIdentity();
         setIdentity(id);
+        await connectActors(id);
       },
     });
   };
@@ -57,6 +86,14 @@ export default function App() {
     setView("feed");
     setViewingPrincipal(null);
   };
+
+  if (booting) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0f0f11", color: "#a1a1aa", padding: "3rem", textAlign: "center" }}>
+        Starting ScaleSpace…
+      </div>
+    );
+  }
 
   return (
     <div
@@ -109,6 +146,27 @@ export default function App() {
           )}
         </header>
 
+        {bootError && (
+          <div
+            style={{
+              background: "#450a0a",
+              border: "1px solid #7f1d1d",
+              color: "#fecaca",
+              padding: "0.9rem 1rem",
+              borderRadius: "8px",
+              marginBottom: "1.25rem",
+              fontSize: "0.9rem",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Canister connection</strong>
+            <div style={{ marginTop: "0.35rem" }}>{bootError}</div>
+            <div style={{ marginTop: "0.5rem", color: "#fca5a5", fontSize: "0.8rem" }}>
+              From the project root on Ubuntu: <code>dfx start --background && dfx deploy</code> then restart the frontend.
+            </div>
+          </div>
+        )}
+
         {!identity ? (
           <div style={{ textAlign: "center", marginTop: "4rem" }}>
             <p style={{ color: "#a1a1aa", marginBottom: "1.5rem" }}>
@@ -152,7 +210,9 @@ export default function App() {
             <PostForm
               actor={actor}
               principal={identity.getPrincipal()}
-              onPostCreated={() => window.location.reload()}
+              onPostCreated={() => {
+                /* feed reloads on its own interval / refresh */
+              }}
             />
 
             <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #27272a" }} />
