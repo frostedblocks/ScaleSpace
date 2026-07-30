@@ -1,24 +1,40 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 /**
- * PostForm – supports two ways to add one image:
- * 1. Paste any public image URL (user’s own storage)
- * 2. Upload a file to Cloudflare R2
- *
- * Only one image is allowed per post.
+ * PostForm – free tier = 115 chars, paid tiers = 512 chars
  */
-export default function PostForm({ actor, onPostCreated }) {
+export default function PostForm({ actor, onPostCreated, principal }) {
   const [content, setContent] = useState("");
-  const [mode, setMode] = useState("none"); // "none" | "url" | "upload"
+  const [mode, setMode] = useState("none");
   const [imageURL, setImageURL] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isFreeTier, setIsFreeTier] = useState(true);
 
-  const MAX_LENGTH = 10000;
+  const FREE_MAX = 115;
+  const PAID_MAX = 512;
+  const maxLength = isFreeTier ? FREE_MAX : PAID_MAX;
 
-  // ---------- URL mode ----------
+  // Load whether the user is still on free tier
+  useEffect(() => {
+    if (!actor || !principal) return;
+
+    const loadStats = async () => {
+      try {
+        const result = await actor.getUserStats(principal);
+        if (result && result.length > 0) {
+          setIsFreeTier(result[0].isFreeTier);
+        }
+      } catch (err) {
+        // default to free tier
+      }
+    };
+
+    loadStats();
+  }, [actor, principal]);
+
   const handleURLChange = (e) => {
     const url = e.target.value.trim();
     setImageURL(url);
@@ -26,7 +42,6 @@ export default function PostForm({ actor, onPostCreated }) {
     setError("");
   };
 
-  // ---------- Upload mode ----------
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -75,6 +90,11 @@ export default function PostForm({ actor, onPostCreated }) {
       return;
     }
 
+    if (content.length > maxLength) {
+      setError(`Post is too long. Limit is ${maxLength} characters.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -98,7 +118,7 @@ export default function PostForm({ actor, onPostCreated }) {
       );
 
       if (result.length === 0) {
-        setError("Could not create post. Check token balance or daily limit.");
+        setError("Could not create post. Check token balance, daily limit, or character limit.");
       } else {
         setContent("");
         clearImage();
@@ -112,23 +132,23 @@ export default function PostForm({ actor, onPostCreated }) {
     }
   };
 
-  const remaining = MAX_LENGTH - content.length;
-  const counterColor = remaining < 100 ? "#c00" : remaining < 500 ? "#b45309" : "#888";
+  const remaining = maxLength - content.length;
+  const counterColor = remaining < 20 ? "#c00" : remaining < 50 ? "#b45309" : "#888";
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: "2rem" }}>
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="What's on your mind?"
-        rows={4}
-        maxLength={MAX_LENGTH}
+        placeholder={isFreeTier ? "What's on your mind? (115 chars free)" : "What's on your mind?"}
+        rows={3}
+        maxLength={maxLength}
         style={{ width: "100%", padding: "0.75rem" }}
       />
 
-      {/* Character counter */}
       <div style={{ textAlign: "right", fontSize: "0.8rem", color: counterColor, marginTop: "0.25rem" }}>
-        {content.length.toLocaleString()} / {MAX_LENGTH.toLocaleString()}
+        {content.length} / {maxLength}
+        {isFreeTier && <span style={{ marginLeft: "0.5rem", color: "#666" }}>(Free tier)</span>}
       </div>
 
       {/* Image section */}
