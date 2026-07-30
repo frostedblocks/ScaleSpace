@@ -69,13 +69,33 @@ actor ScaleSpace {
     reportsToHide : Nat;
   };
 
+  type SubOffer = {
+    tokens : Nat;
+    priceE8s : Nat;
+    label : Text;
+  };
+
+  type PendingPayment = {
+    user : Principal;
+    tokens : Nat;
+    priceE8s : Nat;
+    requestedAt : Time.Time;
+  };
+
+  type TreasuryStats = {
+    paymentsEnabled : Bool;
+    totalIcpReceivedE8s : Nat;
+    pendingCount : Nat;
+  };
+
   private stable var nextPostId : Nat = 0;
   private stable var nextCommentId : Nat = 0;
+  private stable var nextPendingId : Nat = 0;
 
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
   private stable var ownerCloaked : Bool = false;
 
-  // Live-adjustable limits (master can change without redeploy)
+  // Live-adjustable usage limits
   private stable var freeTierLimit : Nat = 20;
   private stable var dailyLimit : Nat = 5;
   private stable var tokensPerPost : Nat = 5;
@@ -87,6 +107,13 @@ actor ScaleSpace {
   private stable var reportsToHide : Nat = 5;
   private stable var tiers : [Nat] = [200, 400, 600];
 
+  // ICP prices (e8s: 100_000_000 e8s = 1 ICP). Master can change live.
+  private stable var price200E8s : Nat = 10_000_000;  // 0.10 ICP
+  private stable var price400E8s : Nat = 18_000_000;  // 0.18 ICP
+  private stable var price600E8s : Nat = 25_000_000;  // 0.25 ICP
+  private stable var paymentsEnabled : Bool = false;
+  private stable var totalIcpReceivedE8s : Nat = 0;
+
   private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
   private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
   private var posts = HashMap.HashMap<Nat, Post>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
@@ -96,6 +123,7 @@ actor ScaleSpace {
   private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
   private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
   private var banned = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
+  private var pendingPayments = HashMap.HashMap<Nat, PendingPayment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
 
   private func isMaster(p : Principal) : Bool {
     not Principal.isAnonymous(owner) and Principal.equal(owner, p)
@@ -106,6 +134,24 @@ actor ScaleSpace {
       case (?true) { true };
       case _ { false };
     }
+  };
+
+  private func priceForTokens(tokenAmount : Nat) : ?Nat {
+    if (tokenAmount == 200) { ?price200E8s }
+    else if (tokenAmount == 400) { ?price400E8s }
+    else if (tokenAmount == 600) { ?price600E8s }
+    else { null }
+  };
+
+  private func creditTokens(user : Principal, amount : Nat) {
+    let bal = getUserBalance(user);
+    userBalances.put(user, {
+      tokens = bal.tokens + amount;
+      postsThisMonth = bal.postsThisMonth;
+      postsToday = bal.postsToday;
+      lastReset = bal.lastReset;
+      lastDailyReset = bal.lastDailyReset;
+    });
   };
 
   private func getUserBalance(user : Principal) : UserBalance {
@@ -189,15 +235,7 @@ actor ScaleSpace {
       avatarURL = "";
     });
 
-    let bal = getUserBalance(msg.caller);
-    userBalances.put(msg.caller, {
-      tokens = bal.tokens + 1000;
-      postsThisMonth = bal.postsThisMonth;
-      postsToday = bal.postsToday;
-      lastReset = bal.lastReset;
-      lastDailyReset = bal.lastDailyReset;
-    });
-
+    creditTokens(msg.caller, 1000);
     "Master profile claimed successfully"
   };
 
@@ -214,7 +252,106 @@ actor ScaleSpace {
     true
   };
 
-  /// Public: current limits (frontend can show correct counters)
+  // ─── Tokenomics / ICP pricing ───────────────────────────────────────────
+
+  public query func getSubscriptionOffers() : async [SubOffer] {
+    [
+      { tokens = 200; priceE8s = price200E8s; label = "Starter" },
+      { tokens = 400; priceE8s = price400E8s; label = "Regular" },
+      { tokens = 600; priceE8s = price600E8s; label = "Power" },
+    ]
+  };
+
+  public query func isPaymentsEnabled() : async Bool { paymentsEnabled };
+
+  public shared(msg) func adminSetPaymentsEnabled(enabled : Bool) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+    paymentsEnabled := enabled;
+    if (enabled) { "Payments enabled — free test subscribe is locked" }
+    else { "Payments disabled — test subscribe allowed" }
+  };
+
+  public shared(msg) func adminSetPrices(p200 : Nat, p400 : Nat, p600 : Nat) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+    if (p200 == 0 or p400 == 0 or p600 == 0) { return "Prices must be > 0 e8s" };
+    price200E8s := p200;
+    price400E8s := p400;
+    price600E8s := p600;
+    "Prices updated"
+  };
+
+  public query(msg) func getTreasuryStats() : async TreasuryStats {
+    if (not isMaster(msg.caller)) {
+      return { paymentsEnabled = false; totalIcpReceivedE8s = 0; pendingCount = 0 };
+    };
+    {
+      paymentsEnabled = paymentsEnabled;
+      totalIcpReceivedE8s = totalIcpReceivedE8s;
+      pendingCount = pendingPayments.size();
+    }
+  };
+
+  public query(msg) func getPendingPayments() : async [(Nat, PendingPayment)] {
+    if (not isMaster(msg.caller)) { return [] };
+    let buf = Buffer.Buffer<(Nat, PendingPayment)>(0);
+    for ((id, p) in pendingPayments.entries()) {
+      buf.add((id, p));
+    };
+    Buffer.toArray(buf)
+  };
+
+  /// User requests a paid tier. Does not credit tokens until master confirms ICP received.
+  public shared(msg) func requestPaidSubscription(tokenAmount : Nat) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    if (not paymentsEnabled) {
+      return "Payments are not live yet. Use test subscribe or wait for launch.";
+    };
+
+    switch (priceForTokens(tokenAmount)) {
+      case null { return "Invalid tier. Choose 200, 400, or 600." };
+      case (?price) {
+        let id = nextPendingId;
+        nextPendingId += 1;
+        pendingPayments.put(id, {
+          user = msg.caller;
+          tokens = tokenAmount;
+          priceE8s = price;
+          requestedAt = Time.now();
+        });
+        "Request #" # Nat.toText(id) # " recorded. Send " #
+          Nat.toText(price) # " e8s ICP (" #
+          Nat.toText(tokenAmount) # " tokens). Tokens are added after confirmation."
+      };
+    }
+  };
+
+  /// Master confirms ICP was received and credits tokens.
+  public shared(msg) func adminConfirmPayment(pendingId : Nat) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+
+    switch (pendingPayments.get(pendingId)) {
+      case null { return "Pending payment not found" };
+      case (?p) {
+        creditTokens(p.user, p.tokens);
+        totalIcpReceivedE8s += p.priceE8s;
+        pendingPayments.delete(pendingId);
+        "Confirmed. Credited " # Nat.toText(p.tokens) # " tokens. Treasury +" #
+          Nat.toText(p.priceE8s) # " e8s."
+      };
+    }
+  };
+
+  public shared(msg) func adminRejectPayment(pendingId : Nat) : async Text {
+    if (not isMaster(msg.caller)) { return "Not authorized" };
+    switch (pendingPayments.get(pendingId)) {
+      case null { return "Pending payment not found" };
+      case (?_) {
+        pendingPayments.delete(pendingId);
+        "Pending payment rejected and removed"
+      };
+    }
+  };
+
   public query func getLimits() : async Limits {
     {
       freeTierLimit = freeTierLimit;
@@ -229,7 +366,6 @@ actor ScaleSpace {
     }
   };
 
-  /// Master only: update limits live (no redeploy)
   public shared(msg) func adminSetLimits(
     freeTierLimit_ : Nat,
     dailyLimit_ : Nat,
@@ -242,13 +378,10 @@ actor ScaleSpace {
     reportsToHide_ : Nat
   ) : async Text {
     if (not isMaster(msg.caller)) { return "Not authorized" };
-
     if (freeMaxLength_ == 0 or paidMaxLength_ == 0 or maxCommentLength_ == 0) {
       return "Character limits must be at least 1";
     };
-    if (reportsToHide_ == 0) {
-      return "Reports to hide must be at least 1";
-    };
+    if (reportsToHide_ == 0) { return "Reports to hide must be at least 1" };
 
     freeTierLimit := freeTierLimit_;
     dailyLimit := dailyLimit_;
@@ -259,21 +392,13 @@ actor ScaleSpace {
     paidMaxLength := paidMaxLength_;
     maxCommentLength := maxCommentLength_;
     reportsToHide := reportsToHide_;
-
     "Limits updated"
   };
 
   public shared(msg) func adminGrantTokens(to : Principal, amount : Nat) : async Bool {
     if (not isMaster(msg.caller)) { return false };
     if (amount == 0) { return true };
-    let bal = getUserBalance(to);
-    userBalances.put(to, {
-      tokens = bal.tokens + amount;
-      postsThisMonth = bal.postsThisMonth;
-      postsToday = bal.postsToday;
-      lastReset = bal.lastReset;
-      lastDailyReset = bal.lastDailyReset;
-    });
+    creditTokens(to, amount);
     true
   };
 
@@ -283,15 +408,9 @@ actor ScaleSpace {
       case null { false };
       case (?post) {
         posts.put(postId, {
-          id = post.id;
-          author = post.author;
-          content = post.content;
-          imageURL = post.imageURL;
-          timestamp = post.timestamp;
-          likes = post.likes;
-          loves = post.loves;
-          reportCount = post.reportCount;
-          isHidden = true;
+          id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+          timestamp = post.timestamp; likes = post.likes; loves = post.loves;
+          reportCount = post.reportCount; isHidden = true;
         });
         true
       };
@@ -305,15 +424,9 @@ actor ScaleSpace {
       case (?post) {
         reports.delete(postId);
         posts.put(postId, {
-          id = post.id;
-          author = post.author;
-          content = post.content;
-          imageURL = post.imageURL;
-          timestamp = post.timestamp;
-          likes = post.likes;
-          loves = post.loves;
-          reportCount = 0;
-          isHidden = false;
+          id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+          timestamp = post.timestamp; likes = post.likes; loves = post.loves;
+          reportCount = 0; isHidden = false;
         });
         true
       };
@@ -334,9 +447,7 @@ actor ScaleSpace {
     "User unbanned"
   };
 
-  public query func isBanned(user : Principal) : async Bool {
-    isBannedUser(user)
-  };
+  public query func isBanned(user : Principal) : async Bool { isBannedUser(user) };
 
   public query(msg) func getBannedUsers() : async [Principal] {
     if (not isMaster(msg.caller)) { return [] };
@@ -350,16 +461,9 @@ actor ScaleSpace {
   public query(msg) func getSiteStats() : async SiteStats {
     if (not isMaster(msg.caller)) {
       return {
-        totalPosts = 0;
-        visiblePosts = 0;
-        hiddenPosts = 0;
-        totalComments = 0;
-        totalProfiles = 0;
-        totalBalances = 0;
-        reportedPosts = 0;
-        totalReportFlags = 0;
-        bannedUsers = 0;
-        tokensInCirculation = 0;
+        totalPosts = 0; visiblePosts = 0; hiddenPosts = 0; totalComments = 0;
+        totalProfiles = 0; totalBalances = 0; reportedPosts = 0; totalReportFlags = 0;
+        bannedUsers = 0; tokensInCirculation = 0;
       };
     };
 
@@ -367,7 +471,6 @@ actor ScaleSpace {
     var hidden : Nat = 0;
     var reported : Nat = 0;
     var reportFlags : Nat = 0;
-
     for ((id, post) in posts.entries()) {
       if (post.isHidden) { hidden += 1 } else { visible += 1 };
       if (post.reportCount > 0) {
@@ -404,9 +507,7 @@ actor ScaleSpace {
     if (not isMaster(msg.caller)) { return [] };
     let buf = Buffer.Buffer<Post>(0);
     for ((id, post) in posts.entries()) {
-      if (post.reportCount > 0 or post.isHidden) {
-        buf.add(post);
-      };
+      if (post.reportCount > 0 or post.isHidden) { buf.add(post) };
     };
     let arr = Buffer.toArray(buf);
     Array.sort<Post>(arr, func (a, b) {
@@ -455,16 +556,20 @@ actor ScaleSpace {
     }
   };
 
-  public shared(msg) func subscribe(tokenAmount : Nat) : async () {
-    if (isBannedUser(msg.caller)) { return };
-    let current = getUserBalance(msg.caller);
-    userBalances.put(msg.caller, {
-      tokens = current.tokens + tokenAmount;
-      postsThisMonth = current.postsThisMonth;
-      postsToday = current.postsToday;
-      lastReset = current.lastReset;
-      lastDailyReset = current.lastDailyReset;
-    });
+  /// Test-mode free subscribe. Locked when payments are enabled (except master).
+  public shared(msg) func subscribe(tokenAmount : Nat) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    if (paymentsEnabled and not isMaster(msg.caller)) {
+      return "Payments are live. Use requestPaidSubscription instead.";
+    };
+    switch (priceForTokens(tokenAmount)) {
+      case null {
+        if (not isMaster(msg.caller)) { return "Invalid tier" };
+      };
+      case (?_) {};
+    };
+    creditTokens(msg.caller, tokenAmount);
+    "Added " # Nat.toText(tokenAmount) # " tokens"
   };
 
   public shared(msg) func spendTokens(amount : Nat) : async Bool {
@@ -522,15 +627,8 @@ actor ScaleSpace {
     let postId = nextPostId;
     nextPostId += 1;
     posts.put(postId, {
-      id = postId;
-      author = msg.caller;
-      content = content;
-      imageURL = imageURL;
-      timestamp = Time.now();
-      likes = 0;
-      loves = 0;
-      reportCount = 0;
-      isHidden = false;
+      id = postId; author = msg.caller; content = content; imageURL = imageURL;
+      timestamp = Time.now(); likes = 0; loves = 0; reportCount = 0; isHidden = false;
     });
     indexPost(postId, content);
     let newTokens = if (master or isFree) { balance.tokens } else { balance.tokens - tokensPerPost };
@@ -572,9 +670,7 @@ actor ScaleSpace {
       let id = nextPostId - 1 - i;
       switch (posts.get(id)) {
         case (?p) {
-          if (not p.isHidden and Principal.equal(p.author, author)) {
-            buf.add(p);
-          };
+          if (not p.isHidden and Principal.equal(p.author, author)) { buf.add(p) };
         };
         case null {};
       };
@@ -592,43 +688,26 @@ actor ScaleSpace {
         switch (reports.get(postId)) {
           case (?reporters) {
             for (r in reporters.vals()) {
-              if (Principal.equal(r, msg.caller)) {
-                return "You already reported this post";
-              };
+              if (Principal.equal(r, msg.caller)) { return "You already reported this post" };
             };
             let newReporters = Array.append(reporters, [msg.caller]);
             reports.put(postId, newReporters);
             let newCount = newReporters.size();
             let shouldHide = newCount >= reportsToHide;
             posts.put(postId, {
-              id = post.id;
-              author = post.author;
-              content = post.content;
-              imageURL = post.imageURL;
-              timestamp = post.timestamp;
-              likes = post.likes;
-              loves = post.loves;
-              reportCount = newCount;
-              isHidden = shouldHide;
+              id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+              timestamp = post.timestamp; likes = post.likes; loves = post.loves;
+              reportCount = newCount; isHidden = shouldHide;
             });
-            if (shouldHide) {
-              return "Post has been hidden due to multiple reports";
-            } else {
-              return "Report submitted. Thank you.";
-            }
+            if (shouldHide) { return "Post has been hidden due to multiple reports" }
+            else { return "Report submitted. Thank you." }
           };
           case null {
             reports.put(postId, [msg.caller]);
             posts.put(postId, {
-              id = post.id;
-              author = post.author;
-              content = post.content;
-              imageURL = post.imageURL;
-              timestamp = post.timestamp;
-              likes = post.likes;
-              loves = post.loves;
-              reportCount = 1;
-              isHidden = false;
+              id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+              timestamp = post.timestamp; likes = post.likes; loves = post.loves;
+              reportCount = 1; isHidden = false;
             });
             return "Report submitted. Thank you.";
           };
@@ -643,15 +722,9 @@ actor ScaleSpace {
       case (?post) {
         if (post.isHidden) { return false };
         posts.put(postId, {
-          id = post.id;
-          author = post.author;
-          content = post.content;
-          imageURL = post.imageURL;
-          timestamp = post.timestamp;
-          likes = post.likes + 1;
-          loves = post.loves;
-          reportCount = post.reportCount;
-          isHidden = post.isHidden;
+          id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+          timestamp = post.timestamp; likes = post.likes + 1; loves = post.loves;
+          reportCount = post.reportCount; isHidden = post.isHidden;
         });
         true
       };
@@ -683,15 +756,9 @@ actor ScaleSpace {
           lastDailyReset = authorBalance.lastDailyReset;
         });
         posts.put(postId, {
-          id = post.id;
-          author = post.author;
-          content = post.content;
-          imageURL = post.imageURL;
-          timestamp = post.timestamp;
-          likes = post.likes;
-          loves = post.loves + 1;
-          reportCount = post.reportCount;
-          isHidden = post.isHidden;
+          id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
+          timestamp = post.timestamp; likes = post.likes; loves = post.loves + 1;
+          reportCount = post.reportCount; isHidden = post.isHidden;
         });
         true
       };
@@ -709,11 +776,7 @@ actor ScaleSpace {
     let commentId = nextCommentId;
     nextCommentId += 1;
     comments.put(commentId, {
-      id = commentId;
-      postId = postId;
-      author = msg.caller;
-      content = content;
-      timestamp = Time.now();
+      id = commentId; postId = postId; author = msg.caller; content = content; timestamp = Time.now();
     });
     switch (postComments.get(postId)) {
       case (?list) { postComments.put(postId, Array.append(list, [commentId])); };
