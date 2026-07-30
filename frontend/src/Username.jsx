@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from "react";
 
 /**
- * Displays a user's avatar + username.
- * Clicking opens their public profile (if onClick is provided).
+ * Avatar + username. Shows a Founder badge for the master profile.
  */
 export default function Username({ actor, principal, size = 28, onClick }) {
   const [profile, setProfile] = useState(null);
+  const [isMaster, setIsMaster] = useState(false);
 
   useEffect(() => {
     if (!actor || !principal) return;
 
     const load = async () => {
       try {
-        const result = await actor.getProfile(principal);
-        if (result && result.length > 0) {
-          setProfile(result[0]);
+        const [profileResult, ownerFlag] = await Promise.all([
+          actor.getProfile(principal),
+          actor.isOwner(principal),
+        ]);
+        if (profileResult && profileResult.length > 0) {
+          setProfile(profileResult[0]);
         }
+        setIsMaster(!!ownerFlag);
       } catch (err) {
         // silent fail
       }
@@ -45,7 +49,6 @@ export default function Username({ actor, principal, size = 28, onClick }) {
       }}
       title={onClick ? "View profile" : undefined}
     >
-      {/* Avatar */}
       {avatarURL ? (
         <img
           src={avatarURL}
@@ -55,7 +58,7 @@ export default function Username({ actor, principal, size = 28, onClick }) {
             height: size,
             borderRadius: "50%",
             objectFit: "cover",
-            border: "1px solid #3f3f46",
+            border: isMaster ? "2px solid #fbbf24" : "1px solid #3f3f46",
             background: "#27272a",
           }}
           onError={(e) => {
@@ -68,13 +71,13 @@ export default function Username({ actor, principal, size = 28, onClick }) {
             width: size,
             height: size,
             borderRadius: "50%",
-            background: "#27272a",
-            border: "1px solid #3f3f46",
+            background: isMaster ? "#422006" : "#27272a",
+            border: isMaster ? "2px solid #fbbf24" : "1px solid #3f3f46",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: size * 0.4,
-            color: "#71717a",
+            color: isMaster ? "#fbbf24" : "#71717a",
             flexShrink: 0,
           }}
         >
@@ -82,12 +85,30 @@ export default function Username({ actor, principal, size = 28, onClick }) {
         </div>
       )}
 
-      {/* Name */}
       {name ? (
-        <span style={{ fontWeight: 500, color: "#fafafa" }}>{name}</span>
+        <span style={{ fontWeight: 500, color: isMaster ? "#fde68a" : "#fafafa" }}>
+          {name}
+        </span>
       ) : (
         <span style={{ color: "#a1a1aa" }}>
           {principal.toString().slice(0, 10)}…
+        </span>
+      )}
+
+      {isMaster && (
+        <span
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            letterSpacing: "0.03em",
+            color: "#0f0f11",
+            background: "#fbbf24",
+            padding: "0.1rem 0.4rem",
+            borderRadius: "4px",
+            textTransform: "uppercase",
+          }}
+        >
+          Founder
         </span>
       )}
     </span>
