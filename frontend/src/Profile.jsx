@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 
-/**
- * Profile page – view and edit username, bio, and avatar URL.
- */
 export default function Profile({ actor, identity }) {
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -59,70 +56,64 @@ export default function Profile({ actor, identity }) {
   };
 
   if (loading) {
-    return <p>Loading profile…</p>;
+    return <p style={{ color: "#71717a" }}>Loading profile…</p>;
   }
 
   return (
     <div>
-      <h2 style={{ marginTop: 0 }}>Your Profile</h2>
+      <h2 style={{ marginTop: 0, color: "#fafafa" }}>Your Profile</h2>
 
       {principal && (
-        <p style={{ fontSize: "0.8rem", color: "#666", marginBottom: "1.25rem" }}>
-          Principal: {principal.toText()}
+        <p style={{ fontSize: "0.8rem", color: "#71717a", marginBottom: "1.5rem", wordBreak: "break-all" }}>
+          {principal.toText()}
         </p>
       )}
 
       <form onSubmit={handleSave}>
-        <div style={{ marginBottom: "1rem" }}>
-          <label style={{ display: "block", marginBottom: "0.3rem", fontWeight: 500 }}>
-            Username
-          </label>
+        <div style={{ marginBottom: "1.1rem" }}>
+          <label style={labelStyle}>Username</label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Choose a username"
             maxLength={50}
-            style={{ width: "100%", padding: "0.5rem" }}
+            style={inputStyle}
           />
         </div>
 
-        <div style={{ marginBottom: "1rem" }}>
-          <label style={{ display: "block", marginBottom: "0.3rem", fontWeight: 500 }}>
-            Bio
-          </label>
+        <div style={{ marginBottom: "1.1rem" }}>
+          <label style={labelStyle}>Bio</label>
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             placeholder="A short bio…"
             rows={3}
             maxLength={300}
-            style={{ width: "100%", padding: "0.5rem" }}
+            style={{ ...inputStyle, resize: "vertical" }}
           />
         </div>
 
-        <div style={{ marginBottom: "1.25rem" }}>
-          <label style={{ display: "block", marginBottom: "0.3rem", fontWeight: 500 }}>
-            Avatar URL
-          </label>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label style={labelStyle}>Avatar URL</label>
           <input
             type="url"
             value={avatarURL}
             onChange={(e) => setAvatarURL(e.target.value)}
-            placeholder="https://… (Cloudflare R2, IPFS, Arweave, etc.)"
-            style={{ width: "100%", padding: "0.5rem" }}
+            placeholder="https://… (IPFS, Arweave, Cloudflare, etc.)"
+            style={inputStyle}
           />
           {avatarURL && (
             <img
               src={avatarURL}
               alt="avatar preview"
               style={{
-                marginTop: "0.6rem",
-                width: "80px",
-                height: "80px",
+                marginTop: "0.75rem",
+                width: "72px",
+                height: "72px",
                 objectFit: "cover",
                 borderRadius: "50%",
-                border: "1px solid #ddd",
+                border: "2px solid #3f3f46",
               }}
               onError={(e) => {
                 e.target.style.display = "none";
@@ -131,13 +122,43 @@ export default function Profile({ actor, identity }) {
           )}
         </div>
 
-        <button type="submit" disabled={saving}>
+        <button
+          type="submit"
+          disabled={saving}
+          style={{
+            padding: "0.6rem 1.4rem",
+            background: saving ? "#3f3f46" : "#2563eb",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: saving ? "default" : "pointer",
+            fontSize: "0.95rem",
+          }}
+        >
           {saving ? "Saving…" : "Save Profile"}
         </button>
       </form>
 
-      {message && <p style={{ color: "green", marginTop: "1rem" }}>{message}</p>}
-      {error && <p style={{ color: "crimson", marginTop: "1rem" }}>{error}</p>}
+      {message && <p style={{ color: "#4ade80", marginTop: "1rem" }}>{message}</p>}
+      {error && <p style={{ color: "#f87171", marginTop: "1rem" }}>{error}</p>}
     </div>
   );
 }
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "0.35rem",
+  fontWeight: 500,
+  color: "#a1a1aa",
+  fontSize: "0.9rem",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "0.55rem 0.7rem",
+  background: "#18181b",
+  color: "#e4e4e7",
+  border: "1px solid #3f3f46",
+  borderRadius: "8px",
+  fontSize: "0.95rem",
+};
