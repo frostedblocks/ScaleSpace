@@ -10,8 +10,6 @@ import Buffer "mo:base/Buffer";
 
 actor ScaleSpace {
 
-  // ==================== TYPES ====================
-
   type UserProfile = {
     username : Text;
     bio : Text;
@@ -46,8 +44,6 @@ actor ScaleSpace {
     timestamp : Time.Time;
   };
 
-  // ==================== STORAGE ====================
-
   private stable var nextPostId : Nat = 0;
   private stable var nextCommentId : Nat = 0;
 
@@ -60,19 +56,16 @@ actor ScaleSpace {
   private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
   private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
 
-  // ==================== CONSTANTS ====================
-
   private let FREE_TIER_LIMIT : Nat = 20;
   private let DAILY_LIMIT : Nat = 5;
   private let TOKENS_PER_POST : Nat = 5;
   private let TOKENS_PER_LOVE : Nat = 2;
+  private let TOKENS_PER_MESSAGE : Nat = 1;
   private let FREE_MAX_LENGTH : Nat = 115;
   private let PAID_MAX_LENGTH : Nat = 512;
   private let MAX_COMMENT_LENGTH : Nat = 2000;
   private let TIERS : [Nat] = [200, 400, 600];
   private let REPORTS_TO_HIDE : Nat = 5;
-
-  // ==================== HELPERS ====================
 
   private func getUserBalance(user : Principal) : UserBalance {
     switch (userBalances.get(user)) {
@@ -135,8 +128,6 @@ actor ScaleSpace {
     };
   };
 
-  // ==================== PROFILE ====================
-
   public shared(msg) func setProfile(username : Text, bio : Text, avatarURL : Text) : async () {
     let profile : UserProfile = { username; bio; avatarURL };
     userProfiles.put(msg.caller, profile);
@@ -146,14 +137,11 @@ actor ScaleSpace {
     userProfiles.get(user)
   };
 
-  // ==================== FOLLOW / UNFOLLOW ====================
-
   public shared(msg) func follow(target : Principal) : async () {
-    if (Principal.equal(msg.caller, target)) { return }; // can't follow yourself
+    if (Principal.equal(msg.caller, target)) { return };
 
     switch (following.get(msg.caller)) {
       case (?list) {
-        // prevent duplicates
         for (p in list.vals()) {
           if (Principal.equal(p, target)) { return };
         };
@@ -182,8 +170,6 @@ actor ScaleSpace {
     }
   };
 
-  // ==================== TOKENS ====================
-
   public shared(msg) func subscribe(tokenAmount : Nat) : async () {
     let current = getUserBalance(msg.caller);
     let updated : UserBalance = {
@@ -194,6 +180,32 @@ actor ScaleSpace {
       lastDailyReset = current.lastDailyReset;
     };
     userBalances.put(msg.caller, updated);
+  };
+
+  /// Spend tokens (used for messaging, etc.). Returns false if not enough.
+  public shared(msg) func spendTokens(amount : Nat) : async Bool {
+    if (amount == 0) { return true };
+
+    var balance = getUserBalance(msg.caller);
+    balance := maybeReset(msg.caller, balance);
+
+    if (balance.tokens < amount) {
+      return false;
+    };
+
+    let updated : UserBalance = {
+      tokens = balance.tokens - amount;
+      postsThisMonth = balance.postsThisMonth;
+      postsToday = balance.postsToday;
+      lastReset = balance.lastReset;
+      lastDailyReset = balance.lastDailyReset;
+    };
+    userBalances.put(msg.caller, updated);
+    true
+  };
+
+  public query func getTokensPerMessage() : async Nat {
+    TOKENS_PER_MESSAGE
   };
 
   public query func getUserStats(user : Principal) : async ?{
@@ -217,8 +229,6 @@ actor ScaleSpace {
   };
 
   public query func getTiers() : async [Nat] { TIERS };
-
-  // ==================== POSTS ====================
 
   public shared(msg) func makePost(content : Text, imageURL : ?Text) : async ?Nat {
     var balance = getUserBalance(msg.caller);
@@ -287,7 +297,6 @@ actor ScaleSpace {
     Buffer.toArray(buf)
   };
 
-  // Get posts by a specific author (for public profile pages)
   public query func getPostsByAuthor(author : Principal, limit : Nat) : async [Post] {
     let buf = Buffer.Buffer<Post>(0);
     var i : Nat = 0;
@@ -305,8 +314,6 @@ actor ScaleSpace {
     };
     Buffer.toArray(buf)
   };
-
-  // ==================== REPORT SYSTEM ====================
 
   public shared(msg) func reportPost(postId : Nat) : async Text {
     switch (posts.get(postId)) {
@@ -366,8 +373,6 @@ actor ScaleSpace {
       };
     }
   };
-
-  // ==================== LIKES & LOVES ====================
 
   public shared(msg) func likePost(postId : Nat) : async Bool {
     switch (posts.get(postId)) {
@@ -440,8 +445,6 @@ actor ScaleSpace {
     }
   };
 
-  // ==================== COMMENTS ====================
-
   public shared(msg) func addComment(postId : Nat, content : Text) : async ?Nat {
     if (Text.size(content) > MAX_COMMENT_LENGTH) { return null };
 
@@ -485,8 +488,6 @@ actor ScaleSpace {
       case null { [] };
     }
   };
-
-  // ==================== SEARCH ====================
 
   public query func searchPosts(keyword : Text) : async [Post] {
     let lower = Text.toLower(keyword);
