@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ReportButton from "./ReportButton";
 import Comments from "./Comments";
 import FollowButton from "./FollowButton";
+import Username from "./Username";
 
 /**
  * PostCard used in the feed.
@@ -57,8 +58,8 @@ export default function PostCard({ post, actor, currentUserPrincipal }) {
           marginBottom: "0.5rem",
         }}
       >
-        <div style={{ fontSize: "0.85rem", color: "#666" }}>
-          {post.author.toString().slice(0, 12)}…
+        <div style={{ fontSize: "0.95rem" }}>
+          <Username actor={actor} principal={post.author} />
         </div>
 
         <FollowButton
