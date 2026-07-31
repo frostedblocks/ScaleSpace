@@ -8,7 +8,7 @@ const MAX_MESSAGE_LENGTH = 1000;
 /**
  * Private messaging UI.
  * - Uses messagingActor for DMs
- * - Uses mainActor.spendTokens(1) before each send
+ * - Uses mainActor.chargeForMessage() before each send (free in test mode)
  */
 export default function Messaging({
   mainActor,
@@ -26,8 +26,17 @@ export default function Messaging({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [messagingFree, setMessagingFree] = useState(true);
 
   const myPrincipal = identity ? identity.getPrincipal() : null;
+
+  useEffect(() => {
+    if (!mainActor) return;
+    mainActor
+      .isMessagingFree()
+      .then((v) => setMessagingFree(!!v))
+      .catch(() => setMessagingFree(true));
+  }, [mainActor]);
 
   const loadConversations = async () => {
     if (!messagingActor) return;
@@ -124,25 +133,28 @@ export default function Messaging({
     setInfo("");
 
     try {
-      // 1) Charge 1 token on main ScaleSpace canister
-      const paid = await mainActor.spendTokens(TOKENS_PER_MESSAGE);
-      if (!paid) {
-        setError("Not enough tokens. Each message costs 1 token.");
+      // Charge (free in test mode / for master)
+      const allowed = await mainActor.chargeForMessage();
+      if (!allowed) {
+        setError(
+          messagingFree
+            ? "Could not send (banned or error)."
+            : `Not enough tokens. Each message costs ${TOKENS_PER_MESSAGE} token when payments are on.`
+        );
         setSending(false);
         return;
       }
 
-      // 2) Send on messaging canister
       const result = await messagingActor.sendMessage(selectedId, text.trim());
       const msgId = Array.isArray(result) ? result[0] : result;
 
       if (msgId === null || msgId === undefined) {
-        setError("Message failed (daily limit or not allowed). Token was still spent.");
+        setError("Message failed (daily limit or not allowed).");
       } else {
         setText("");
         await loadMessages(selectedId);
         await loadConversations();
-        setInfo("Message sent (1 token used).");
+        setInfo(messagingFree ? "Message sent (free in test mode)." : "Message sent (1 token used).");
       }
     } catch (err) {
       console.error(err);
@@ -166,8 +178,34 @@ export default function Messaging({
       </div>
 
       <p style={{ color: "#a1a1aa", fontSize: "0.9rem", marginTop: 0 }}>
-        Each message costs <strong style={{ color: "#e4e4e7" }}>{TOKENS_PER_MESSAGE} token</strong>.
+        {messagingFree ? (
+          <>
+            Messaging is <strong style={{ color: "#4ade80" }}>free</strong> while payments are off (test mode).
+          </>
+        ) : (
+          <>
+            Each message costs <strong style={{ color: "#e4e4e7" }}>{TOKENS_PER_MESSAGE} token</strong>.
+          </>
+        )}{" "}
         Max 50 messages per day. Conversations keep the last 100 messages.
+      </p>
+
+      <p
+        style={{
+          margin: "0 0 1.25rem 0",
+          padding: "0.55rem 0.75rem",
+          fontSize: "0.78rem",
+          lineHeight: 1.45,
+          color: "#a1a1aa",
+          background: "#18181b",
+          border: "1px solid #27272a",
+          borderRadius: "8px",
+        }}
+      >
+        <strong style={{ color: "#d4d4d8" }}>Privacy:</strong> Only you and the other participant
+        can open a conversation. Messages are <strong style={{ color: "#d4d4d8" }}>not</strong>{" "}
+        end-to-end encrypted — content is stored on-chain in the messaging canister and is readable
+        by the app infrastructure. Don’t send passwords or highly sensitive data.
       </p>
 
       {/* Start DM */}
@@ -223,9 +261,9 @@ export default function Messaging({
                   padding: "0.6rem 0.75rem",
                   background: active ? "#1e3a5f" : "#18181b",
                   border: active ? "1px solid #2563eb" : "1px solid #27272a",
-                  borderRadius: "8px",
                   color: "#e4e4e7",
                   cursor: "pointer",
+                  borderRadius: "8px",
                 }}
               >
                 {other ? (
@@ -299,7 +337,9 @@ export default function Messaging({
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Write a message… (1 token)"
+                  placeholder={
+                    messagingFree ? "Write a message…" : "Write a message… (1 token)"
+                  }
                   rows={2}
                   maxLength={MAX_MESSAGE_LENGTH}
                   style={{
@@ -321,7 +361,8 @@ export default function Messaging({
                   }}
                 >
                   <span style={{ fontSize: "0.8rem", color: remaining < 50 ? "#f87171" : "#71717a" }}>
-                    {text.length} / {MAX_MESSAGE_LENGTH} · {TOKENS_PER_MESSAGE} token
+                    {text.length} / {MAX_MESSAGE_LENGTH}
+                    {messagingFree ? " · free" : ` · ${TOKENS_PER_MESSAGE} token`}
                   </span>
                   <button
                     type="submit"
