@@ -1,6 +1,6 @@
 # I.C.E.
 
-Decentralized social platform on the **Internet Computer**.
+**Internet Communications Environment** — a decentralized social platform on the Internet Computer.
 
 *(Repo folder may still be named ScaleSpace — product name is **I.C.E.**)*
 
@@ -9,11 +9,8 @@ Decentralized social platform on the **Internet Computer**.
 ### 1. Install tools (once)
 
 ```bash
-# Node.js 20+
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
-
-# DFX (Internet Computer SDK)
 sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
 source "$HOME/.local/share/dfx/env"
 ```
@@ -31,8 +28,6 @@ cd ScaleSpace
 dfx start --background
 dfx deploy scalespace
 dfx deploy messaging
-# or simply:
-dfx deploy
 ```
 
 ### 4. Run the frontend
@@ -64,13 +59,4 @@ dfx deploy scalespace --network ic
 dfx deploy messaging --network ic
 cd frontend && npm run build
 dfx deploy assets --network ic
-```
-
-## Project layout
-
-```
-backend/main.mo      → main social canister
-messaging/main.mo    → messaging canister
-frontend/            → React + Vite UI (branded I.C.E.)
-dfx.json             → canister config
 ```
