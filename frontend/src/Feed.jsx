@@ -123,6 +123,16 @@ export default function Feed({ actor, currentUserPrincipal, onUserClick }) {
             actor={actor}
             currentUserPrincipal={currentUserPrincipal}
             onUserClick={onUserClick}
+            onDeleted={(id) =>
+              setPosts((prev) => prev.filter((p) => p.id.toString() !== id.toString()))
+            }
+            onUpdated={(updated) =>
+              setPosts((prev) =>
+                prev.map((p) =>
+                  p.id.toString() === updated.id.toString() ? { ...p, content: updated.content } : p
+                )
+              )
+            }
           />
         ))}
     </div>

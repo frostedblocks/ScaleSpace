@@ -158,6 +158,16 @@ export default function UserProfileView({
             post={post}
             actor={actor}
             currentUserPrincipal={currentUserPrincipal}
+            onDeleted={(id) =>
+              setPosts((prev) => prev.filter((p) => p.id.toString() !== id.toString()))
+            }
+            onUpdated={(updated) =>
+              setPosts((prev) =>
+                prev.map((p) =>
+                  p.id.toString() === updated.id.toString() ? { ...p, content: updated.content } : p
+                )
+              )
+            }
           />
         ))
       )}

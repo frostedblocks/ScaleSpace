@@ -114,7 +114,7 @@ export default function Subscribe({ actor, onSuccess }) {
           return (
             <button
               key={tokens}
-              onClick={() => setSelected({ tokens, priceE8s, label: tier.label })}
+              onClick={() => setSelected({ tokens, priceE8s, label: (tier.tierLabel || tier.label) })}
               style={{
                 flex: "1 1 140px",
                 padding: "1.1rem",
@@ -127,7 +127,7 @@ export default function Subscribe({ actor, onSuccess }) {
               }}
             >
               <div style={{ fontWeight: 600, fontSize: "1.05rem", color: "#fafafa" }}>
-                {tier.label || `${tokens} tokens`}
+                {(tier.tierLabel || tier.label) || `${tokens} tokens`}
               </div>
               <div style={{ fontSize: "1.35rem", margin: "0.35rem 0", color: "#60a5fa" }}>
                 {tokens} tokens
@@ -157,7 +157,7 @@ export default function Subscribe({ actor, onSuccess }) {
           <ol style={{ margin: "0.5rem 0 0 1.1rem", padding: 0 }}>
             <li>
               Send <strong style={{ color: "#fbbf24" }}>{e8sToIcp(selected.priceE8s)} ICP</strong> to
-              the ScaleSpace canister account (shown after deploy).
+              the I.C.E. canister account (shown after deploy).
             </li>
             <li>Click the button below to register your purchase request.</li>
             <li>Tokens are added after the payment is confirmed.</li>
