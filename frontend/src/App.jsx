@@ -51,15 +51,8 @@ export default function App() {
   const login = async () => {
     if (!authClient) return;
 
-    const network = import.meta.env.DFX_NETWORK || "local";
-    // Local II for replica testing; production II on mainnet
-    const identityProvider =
-      network === "ic"
-        ? "https://identity.ic0.app"
-        : `http://${import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || "rdmx6-jaaaa-aaaaa-aaadq-cai"}.localhost:4943`;
-
     await authClient.login({
-      identityProvider: network === "ic" ? "https://identity.ic0.app" : "https://identity.ic0.app",
+      identityProvider: "https://identity.ic0.app",
       onSuccess: async () => {
         const id = authClient.getIdentity();
         setIdentity(id);
@@ -90,7 +83,7 @@ export default function App() {
   if (booting) {
     return (
       <div style={{ minHeight: "100vh", background: "#0f0f11", color: "#a1a1aa", padding: "3rem", textAlign: "center" }}>
-        Starting ScaleSpace…
+        Starting I.C.E.…
       </div>
     );
   }
@@ -117,10 +110,10 @@ export default function App() {
           }}
         >
           <h1
-            style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa" }}
+            style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa", letterSpacing: "0.06em" }}
             onClick={goFeed}
           >
-            ScaleSpace
+            I.C.E.
           </h1>
 
           {identity && (
@@ -210,9 +203,7 @@ export default function App() {
             <PostForm
               actor={actor}
               principal={identity.getPrincipal()}
-              onPostCreated={() => {
-                /* feed reloads on its own interval / refresh */
-              }}
+              onPostCreated={() => {}}
             />
 
             <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #27272a" }} />
