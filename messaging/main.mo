@@ -2,6 +2,7 @@ import HashMap "mo:base/HashMap";
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 import Nat "mo:base/Nat";
+import Nat32 "mo:base/Nat32";
 import Int "mo:base/Int";
 import Text "mo:base/Text";
 import Array "mo:base/Array";
@@ -9,8 +10,8 @@ import Buffer "mo:base/Buffer";
 import Iter "mo:base/Iter";
 
 /**
- * ScaleSpace Messaging Canister
- * ---------------------------
+ * I.C.E. Messaging Canister
+ * ------------------------
  * Separate from the main social canister to isolate cycle costs.
  *
  * Cost controls:
@@ -20,7 +21,7 @@ import Iter "mo:base/Iter";
  * - No media stored here (send image URLs only if needed)
  * - Only participants can read a conversation
  */
-actor Messaging {
+persistent actor Messaging {
 
   // ==================== TYPES ====================
 
@@ -44,17 +45,17 @@ actor Messaging {
   private stable var nextConversationId : Nat = 0;
   private stable var nextMessageId : Nat = 0;
 
-  private var conversations = HashMap.HashMap<Nat, Conversation>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
-  private var messages = HashMap.HashMap<Nat, Message>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var conversations = HashMap.HashMap<Nat, Conversation>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var messages = HashMap.HashMap<Nat, Message>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
 
   // conversationId -> list of message ids (newest last)
-  private var conversationMessages = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var conversationMessages = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n : Nat) : Nat32 { Nat32.fromNat(n) });
 
   // pair key "principalA:principalB" (sorted) -> conversationId
-  private var pairIndex = HashMap.HashMap<Text, Nat>(0, Text.equal, Text.hash);
+  private transient var pairIndex = HashMap.HashMap<Text, Nat>(0, Text.equal, Text.hash);
 
   // rate limiting: principal -> (count, lastReset)
-  private var dailyCounts = HashMap.HashMap<Principal, { count : Nat; lastReset : Time.Time }>(0, Principal.equal, Principal.hash);
+  private transient var dailyCounts = HashMap.HashMap<Principal, { count : Nat; lastReset : Time.Time }>(0, Principal.equal, Principal.hash);
 
   // ==================== CONSTANTS ====================
 
