@@ -89,11 +89,16 @@ export default function Profile({ actor, identity }) {
 
     try {
       const result = await actor.claimMasterProfile();
-      setMessage(typeof result === "string" ? result : "Claimed.");
+      const text = typeof result === "string" ? result : "Claimed.";
+      if (/success/i.test(text) || /already own/i.test(text)) {
+        setMessage(text);
+      } else {
+        setError(text);
+      }
       await load();
     } catch (err) {
       console.error(err);
-      setError("Could not claim master profile.");
+      setError(err?.message || "Could not claim master profile.");
     } finally {
       setClaiming(false);
     }
@@ -264,6 +269,8 @@ export default function Profile({ actor, identity }) {
           >
             {claiming ? "Claiming…" : "Claim Master Profile"}
           </button>
+          {message && <p style={{ color: "#4ade80", marginTop: "0.75rem", marginBottom: 0 }}>{message}</p>}
+          {error && <p style={{ color: "#f87171", marginTop: "0.75rem", marginBottom: 0 }}>{error}</p>}
         </div>
       )}
 
