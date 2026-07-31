@@ -1,10 +1,10 @@
-import { HttpAgent } from "@dfinity/agent";
+import { Actor, HttpAgent } from "@dfinity/agent";
+import { idlFactory as iceIdl } from "./declarations/ice/ice.did.js";
+import { idlFactory as messagingIdl } from "./declarations/messaging/messaging.did.js";
 
 /**
  * Build authenticated actors after dfx deploy.
- * Requires:
- *   1. dfx deploy (generates declarations + canister IDs)
- *   2. Vite picks up IDs from .dfx or .env.local
+ * Uses .did.js IDL files directly (avoids dfx index.js process.env breakage in Vite).
  */
 
 function getHost() {
@@ -22,7 +22,6 @@ async function makeAgent(identity) {
     identity,
   });
 
-  // Local replica needs the root key
   const network = import.meta.env.DFX_NETWORK || import.meta.env.VITE_DFX_NETWORK || "local";
   if (network !== "ic") {
     await agent.fetchRootKey();
@@ -31,46 +30,24 @@ async function makeAgent(identity) {
   return agent;
 }
 
-export async function createScaleSpaceActor(identity) {
-  const canisterId = import.meta.env.VITE_CANISTER_ID_SCALESPACE;
+export async function createIceActor(identity) {
+  const canisterId = import.meta.env.VITE_CANISTER_ID_ICE;
   if (!canisterId) {
     throw new Error(
-      "Missing VITE_CANISTER_ID_SCALESPACE. Run: dfx deploy  (from project root)"
+      "Missing VITE_CANISTER_ID_ICE. Run: dfx deploy ice"
     );
   }
-
-  let createActor;
-  try {
-    const mod = await import("./declarations/scalespace/index.js");
-    createActor = mod.createActor;
-  } catch (e) {
-    throw new Error(
-      "Declarations not found. From project root run: dfx generate scalespace"
-    );
-  }
-
   const agent = await makeAgent(identity);
-  return createActor(canisterId, { agent });
+  return Actor.createActor(iceIdl, { agent, canisterId });
 }
 
 export async function createMessagingActor(identity) {
   const canisterId = import.meta.env.VITE_CANISTER_ID_MESSAGING;
   if (!canisterId) {
     throw new Error(
-      "Missing VITE_CANISTER_ID_MESSAGING. Run: dfx deploy  (from project root)"
+      "Missing VITE_CANISTER_ID_MESSAGING. Run: dfx deploy messaging"
     );
   }
-
-  let createActor;
-  try {
-    const mod = await import("./declarations/messaging/index.js");
-    createActor = mod.createActor;
-  } catch (e) {
-    throw new Error(
-      "Declarations not found. From project root run: dfx generate messaging"
-    );
-  }
-
   const agent = await makeAgent(identity);
-  return createActor(canisterId, { agent });
+  return Actor.createActor(messagingIdl, { agent, canisterId });
 }

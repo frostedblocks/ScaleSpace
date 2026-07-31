@@ -16,14 +16,19 @@ function canisterIdsPlugin() {
 
       if (fs.existsSync(idsPath)) {
         const ids = JSON.parse(fs.readFileSync(idsPath, "utf8"));
-        if (ids.scalespace) {
-          define["import.meta.env.VITE_CANISTER_ID_SCALESPACE"] = JSON.stringify(
-            ids.scalespace[network] || ids.scalespace.local
+        if (ids.ice) {
+          define["import.meta.env.VITE_CANISTER_ID_ICE"] = JSON.stringify(
+            ids.ice[network] || ids.ice.local
           );
         }
         if (ids.messaging) {
           define["import.meta.env.VITE_CANISTER_ID_MESSAGING"] = JSON.stringify(
             ids.messaging[network] || ids.messaging.local
+          );
+        }
+        if (ids.internet_identity) {
+          define["import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY"] = JSON.stringify(
+            ids.internet_identity[network] || ids.internet_identity.local
           );
         }
       }
@@ -35,12 +40,17 @@ function canisterIdsPlugin() {
         for (const line of text.split("\n")) {
           const m = line.match(/^CANISTER_ID_([A-Z0-9_]+)=(.+)$/);
           if (m) {
+            // dfx often writes CANISTER_ID_X='abc...'; strip surrounding quotes
+            const value = m[2].trim().replace(/^['"]|['"]$/g, "");
             const key = m[1].toLowerCase();
-            if (key === "scalespace") {
-              define["import.meta.env.VITE_CANISTER_ID_SCALESPACE"] = JSON.stringify(m[2].trim());
+            if (key === "ice") {
+              define["import.meta.env.VITE_CANISTER_ID_ICE"] = JSON.stringify(value);
             }
             if (key === "messaging") {
-              define["import.meta.env.VITE_CANISTER_ID_MESSAGING"] = JSON.stringify(m[2].trim());
+              define["import.meta.env.VITE_CANISTER_ID_MESSAGING"] = JSON.stringify(value);
+            }
+            if (key === "internet_identity") {
+              define["import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY"] = JSON.stringify(value);
             }
           }
         }
@@ -69,5 +79,8 @@ export default defineConfig({
   },
   define: {
     global: "window",
+    // dfx-generated index.js references process.env; polyfill for Vite/browser
+    "process.env": JSON.stringify({}),
+    "process.env.DFX_NETWORK": JSON.stringify(process.env.DFX_NETWORK || "local"),
   },
 });
