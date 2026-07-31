@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AuthClient } from "@dfinity/auth-client";
-import { createScaleSpaceActor, createMessagingActor } from "./actors";
+import { Ed25519KeyIdentity } from "@dfinity/identity";
+import { createIceActor, createMessagingActor } from "./actors";
 import PostForm from "./PostForm";
 import Feed from "./Feed";
 import Subscribe from "./Subscribe";
@@ -8,6 +9,23 @@ import Profile from "./Profile";
 import TokenBalance from "./TokenBalance";
 import UserProfileView from "./UserProfileView";
 import Messaging from "./Messaging";
+
+const LOCAL_ID_KEY = "ice-local-ed25519-identity";
+const isLocalNetwork = () => (import.meta.env.DFX_NETWORK || "local") !== "ic";
+
+function loadOrCreateLocalIdentity() {
+  const stored = localStorage.getItem(LOCAL_ID_KEY);
+  if (stored) {
+    try {
+      return Ed25519KeyIdentity.fromJSON(stored);
+    } catch {
+      localStorage.removeItem(LOCAL_ID_KEY);
+    }
+  }
+  const identity = Ed25519KeyIdentity.generate();
+  localStorage.setItem(LOCAL_ID_KEY, JSON.stringify(identity.toJSON()));
+  return identity;
+}
 
 export default function App() {
   const [authClient, setAuthClient] = useState(null);
@@ -23,7 +41,7 @@ export default function App() {
     setBootError("");
     try {
       const [main, msg] = await Promise.all([
-        createScaleSpaceActor(id),
+        createIceActor(id),
         createMessagingActor(id),
       ]);
       setActor(main);
@@ -37,7 +55,25 @@ export default function App() {
   };
 
   useEffect(() => {
-    AuthClient.create().then(async (client) => {
+    (async () => {
+      // Local: restore browser key identity (no Internet Identity needed)
+      if (isLocalNetwork()) {
+        const stored = localStorage.getItem(LOCAL_ID_KEY);
+        if (stored) {
+          try {
+            const id = Ed25519KeyIdentity.fromJSON(stored);
+            setIdentity(id);
+            await connectActors(id);
+          } catch {
+            localStorage.removeItem(LOCAL_ID_KEY);
+          }
+        }
+        setBooting(false);
+        return;
+      }
+
+      // Mainnet: Internet Identity via AuthClient
+      const client = await AuthClient.create();
       setAuthClient(client);
       if (await client.isAuthenticated()) {
         const id = client.getIdentity();
@@ -45,10 +81,21 @@ export default function App() {
         await connectActors(id);
       }
       setBooting(false);
-    });
+    })();
   }, []);
 
+  const loginLocal = async () => {
+    const id = loadOrCreateLocalIdentity();
+    setIdentity(id);
+    await connectActors(id);
+  };
+
   const login = async () => {
+    if (isLocalNetwork()) {
+      await loginLocal();
+      return;
+    }
+
     if (!authClient) return;
 
     await authClient.login({
@@ -62,12 +109,25 @@ export default function App() {
   };
 
   const logout = async () => {
-    await authClient.logout();
+    if (isLocalNetwork()) {
+      // Keep the same principal across sessions for local testing unless user clears storage.
+      // To get a brand-new local identity, remove LOCAL_ID_KEY.
+    } else if (authClient) {
+      await authClient.logout();
+    }
     setIdentity(null);
     setActor(null);
     setMessagingActor(null);
     setView("feed");
     setViewingPrincipal(null);
+  };
+
+  const resetLocalIdentity = async () => {
+    localStorage.removeItem(LOCAL_ID_KEY);
+    setIdentity(null);
+    setActor(null);
+    setMessagingActor(null);
+    setView("feed");
   };
 
   const openUserProfile = (principal) => {
@@ -110,9 +170,8 @@ export default function App() {
           }}
         >
           <h1
-            style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa", letterSpacing: "0.06em" }}
+            style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa" }}
             onClick={goFeed}
-            title="Internet Communications Environment"
           >
             I.C.E.
           </h1>
@@ -136,6 +195,11 @@ export default function App() {
               <button onClick={logout} style={btnStyle}>
                 Logout
               </button>
+              {isLocalNetwork() && (
+                <button onClick={resetLocalIdentity} style={btnStyle} title="Create a new local test identity">
+                  New local ID
+                </button>
+              )}
             </div>
           )}
         </header>
@@ -163,13 +227,7 @@ export default function App() {
 
         {!identity ? (
           <div style={{ textAlign: "center", marginTop: "4rem" }}>
-            <h2 style={{ margin: "0 0 0.5rem 0", color: "#fafafa", fontWeight: 700, letterSpacing: "0.08em" }}>
-              I.C.E.
-            </h2>
-            <p style={{ color: "#a1a1aa", margin: "0 0 0.35rem 0", fontSize: "0.95rem" }}>
-              Internet Communications Environment
-            </p>
-            <p style={{ color: "#71717a", marginBottom: "1.75rem", fontSize: "0.9rem" }}>
+            <p style={{ color: "#a1a1aa", marginBottom: "1.5rem" }}>
               A quieter place for real conversation.
             </p>
             <button
@@ -184,8 +242,13 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              Login with Internet Identity
+              {isLocalNetwork() ? "Continue (local test login)" : "Login with Internet Identity"}
             </button>
+            {isLocalNetwork() && (
+              <p style={{ color: "#71717a", fontSize: "0.85rem", marginTop: "1rem", maxWidth: "28rem", marginLeft: "auto", marginRight: "auto" }}>
+                Local mode uses a browser key (no Internet Identity popup). Safe for testing only.
+              </p>
+            )}
           </div>
         ) : view === "subscribe" ? (
           <Subscribe actor={actor} />
@@ -210,7 +273,9 @@ export default function App() {
             <PostForm
               actor={actor}
               principal={identity.getPrincipal()}
-              onPostCreated={() => {}}
+              onPostCreated={() => {
+                /* feed reloads on its own interval / refresh */
+              }}
             />
 
             <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid #27272a" }} />
