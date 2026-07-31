@@ -95,7 +95,6 @@ actor ScaleSpace {
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
   private stable var ownerCloaked : Bool = false;
 
-  // Live-adjustable usage limits
   private stable var freeTierLimit : Nat = 20;
   private stable var dailyLimit : Nat = 5;
   private stable var tokensPerPost : Nat = 5;
@@ -107,10 +106,9 @@ actor ScaleSpace {
   private stable var reportsToHide : Nat = 5;
   private stable var tiers : [Nat] = [200, 400, 600];
 
-  // ICP prices (e8s: 100_000_000 e8s = 1 ICP). Master can change live.
-  private stable var price200E8s : Nat = 10_000_000;  // 0.10 ICP
-  private stable var price400E8s : Nat = 18_000_000;  // 0.18 ICP
-  private stable var price600E8s : Nat = 25_000_000;  // 0.25 ICP
+  private stable var price200E8s : Nat = 10_000_000;
+  private stable var price400E8s : Nat = 18_000_000;
+  private stable var price600E8s : Nat = 25_000_000;
   private stable var paymentsEnabled : Bool = false;
   private stable var totalIcpReceivedE8s : Nat = 0;
 
@@ -175,22 +173,18 @@ actor ScaleSpace {
     let now = Time.now();
     let dayInNanos : Int = 24 * 60 * 60 * 1_000_000_000;
     let monthInNanos : Int = 30 * dayInNanos;
-
     var postsThisMonth = balance.postsThisMonth;
     var postsToday = balance.postsToday;
     var lastReset = balance.lastReset;
     var lastDailyReset = balance.lastDailyReset;
-
     if (now - balance.lastReset > monthInNanos) {
       postsThisMonth := 0;
       lastReset := now;
     };
-
     if (now - balance.lastDailyReset > dayInNanos) {
       postsToday := 0;
       lastDailyReset := now;
     };
-
     let updated : UserBalance = {
       tokens = balance.tokens;
       postsThisMonth = postsThisMonth;
@@ -230,8 +224,8 @@ actor ScaleSpace {
     ownerCloaked := false;
 
     userProfiles.put(msg.caller, {
-      username = "ScaleSpace";
-      bio = "Founder of ScaleSpace — a quieter place for real conversation.";
+      username = "I.C.E.";
+      bio = "Founder of I.C.E. — a quieter place for real conversation.";
       avatarURL = "";
     });
 
@@ -251,8 +245,6 @@ actor ScaleSpace {
     ownerCloaked := cloaked;
     true
   };
-
-  // ─── Tokenomics / ICP pricing ───────────────────────────────────────────
 
   public query func getSubscriptionOffers() : async [SubOffer] {
     [
@@ -300,13 +292,11 @@ actor ScaleSpace {
     Buffer.toArray(buf)
   };
 
-  /// User requests a paid tier. Does not credit tokens until master confirms ICP received.
   public shared(msg) func requestPaidSubscription(tokenAmount : Nat) : async Text {
     if (isBannedUser(msg.caller)) { return "You are banned" };
     if (not paymentsEnabled) {
       return "Payments are not live yet. Use test subscribe or wait for launch.";
     };
-
     switch (priceForTokens(tokenAmount)) {
       case null { return "Invalid tier. Choose 200, 400, or 600." };
       case (?price) {
@@ -325,10 +315,8 @@ actor ScaleSpace {
     }
   };
 
-  /// Master confirms ICP was received and credits tokens.
   public shared(msg) func adminConfirmPayment(pendingId : Nat) : async Text {
     if (not isMaster(msg.caller)) { return "Not authorized" };
-
     switch (pendingPayments.get(pendingId)) {
       case null { return "Pending payment not found" };
       case (?p) {
@@ -382,7 +370,6 @@ actor ScaleSpace {
       return "Character limits must be at least 1";
     };
     if (reportsToHide_ == 0) { return "Reports to hide must be at least 1" };
-
     freeTierLimit := freeTierLimit_;
     dailyLimit := dailyLimit_;
     tokensPerPost := tokensPerPost_;
@@ -466,7 +453,6 @@ actor ScaleSpace {
         bannedUsers = 0; tokensInCirculation = 0;
       };
     };
-
     var visible : Nat = 0;
     var hidden : Nat = 0;
     var reported : Nat = 0;
@@ -478,17 +464,14 @@ actor ScaleSpace {
         reportFlags += post.reportCount;
       };
     };
-
     var bannedCount : Nat = 0;
     for ((p, flag) in banned.entries()) {
       if (flag) { bannedCount += 1 };
     };
-
     var tokenSum : Nat = 0;
     for ((p, bal) in userBalances.entries()) {
       tokenSum += bal.tokens;
     };
-
     {
       totalPosts = nextPostId;
       visiblePosts = visible;
@@ -556,7 +539,6 @@ actor ScaleSpace {
     }
   };
 
-  /// Test-mode free subscribe. Locked when payments are enabled (except master).
   public shared(msg) func subscribe(tokenAmount : Nat) : async Text {
     if (isBannedUser(msg.caller)) { return "You are banned" };
     if (paymentsEnabled and not isMaster(msg.caller)) {
