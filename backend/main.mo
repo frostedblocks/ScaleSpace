@@ -2,13 +2,14 @@ import HashMap "mo:base/HashMap";
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 import Nat "mo:base/Nat";
+import Nat32 "mo:base/Nat32";
 import Int "mo:base/Int";
 import Text "mo:base/Text";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
 import Buffer "mo:base/Buffer";
 
-actor ScaleSpace {
+persistent actor Ice {
 
   type UserProfile = {
     username : Text;
@@ -72,7 +73,8 @@ actor ScaleSpace {
   type SubOffer = {
     tokens : Nat;
     priceE8s : Nat;
-    label : Text;
+    // "label" is reserved in older Motoko (dfx 0.29.x); use tierLabel
+    tierLabel : Text;
   };
 
   type PendingPayment = {
@@ -95,6 +97,7 @@ actor ScaleSpace {
   private stable var owner : Principal = Principal.fromText("aaaaa-aa");
   private stable var ownerCloaked : Bool = false;
 
+  // Live-adjustable usage limits
   private stable var freeTierLimit : Nat = 20;
   private stable var dailyLimit : Nat = 5;
   private stable var tokensPerPost : Nat = 5;
@@ -106,25 +109,34 @@ actor ScaleSpace {
   private stable var reportsToHide : Nat = 5;
   private stable var tiers : [Nat] = [200, 400, 600];
 
-  private stable var price200E8s : Nat = 10_000_000;
-  private stable var price400E8s : Nat = 18_000_000;
-  private stable var price600E8s : Nat = 25_000_000;
+  // ICP prices (e8s: 100_000_000 e8s = 1 ICP). Master can change live.
+  private stable var price200E8s : Nat = 10_000_000;  // 0.10 ICP
+  private stable var price400E8s : Nat = 18_000_000;  // 0.18 ICP
+  private stable var price600E8s : Nat = 25_000_000;  // 0.25 ICP
   private stable var paymentsEnabled : Bool = false;
   private stable var totalIcpReceivedE8s : Nat = 0;
 
-  private var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
-  private var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
-  private var posts = HashMap.HashMap<Nat, Post>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
-  private var comments = HashMap.HashMap<Nat, Comment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
-  private var postComments = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
-  private var following = HashMap.HashMap<Principal, [Principal]>(0, Principal.equal, Principal.hash);
-  private var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
-  private var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
-  private var banned = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
-  private var pendingPayments = HashMap.HashMap<Nat, PendingPayment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var userBalances = HashMap.HashMap<Principal, UserBalance>(0, Principal.equal, Principal.hash);
+  private transient var userProfiles = HashMap.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
+  private transient var posts = HashMap.HashMap<Nat, Post>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var comments = HashMap.HashMap<Nat, Comment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var postComments = HashMap.HashMap<Nat, [Nat]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var following = HashMap.HashMap<Principal, [Principal]>(0, Principal.equal, Principal.hash);
+  private transient var keywordIndex = HashMap.HashMap<Text, [Nat]>(0, Text.equal, Text.hash);
+  private transient var reports = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var banned = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
+  private transient var pendingPayments = HashMap.HashMap<Nat, PendingPayment>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  // One reaction per user per post
+  private transient var postLikers = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+  private transient var postLovers = HashMap.HashMap<Nat, [Principal]>(0, Nat.equal, func (n: Nat) : Nat32 { Nat32.fromNat(n) });
+
+  // Sentinel "aaaaa-aa" means unclaimed (not the anonymous principal 2vxsx-fae)
+  private func isOwnerUnclaimed() : Bool {
+    Principal.isAnonymous(owner) or Principal.equal(owner, Principal.fromText("aaaaa-aa"))
+  };
 
   private func isMaster(p : Principal) : Bool {
-    not Principal.isAnonymous(owner) and Principal.equal(owner, p)
+    (not isOwnerUnclaimed()) and Principal.equal(owner, p)
   };
 
   private func isBannedUser(p : Principal) : Bool {
@@ -132,6 +144,13 @@ actor ScaleSpace {
       case (?true) { true };
       case _ { false };
     }
+  };
+
+  private func principalInList(list : [Principal], p : Principal) : Bool {
+    for (x in list.vals()) {
+      if (Principal.equal(x, p)) { return true };
+    };
+    false
   };
 
   private func priceForTokens(tokenAmount : Nat) : ?Nat {
@@ -156,8 +175,9 @@ actor ScaleSpace {
     switch (userBalances.get(user)) {
       case (?b) { b };
       case null {
+        // Starter tokens so new users can try loves / messages without buying first
         let newB : UserBalance = {
-          tokens = 0;
+          tokens = 50;
           postsThisMonth = 0;
           postsToday = 0;
           lastReset = Time.now();
@@ -173,18 +193,22 @@ actor ScaleSpace {
     let now = Time.now();
     let dayInNanos : Int = 24 * 60 * 60 * 1_000_000_000;
     let monthInNanos : Int = 30 * dayInNanos;
+
     var postsThisMonth = balance.postsThisMonth;
     var postsToday = balance.postsToday;
     var lastReset = balance.lastReset;
     var lastDailyReset = balance.lastDailyReset;
+
     if (now - balance.lastReset > monthInNanos) {
       postsThisMonth := 0;
       lastReset := now;
     };
+
     if (now - balance.lastDailyReset > dayInNanos) {
       postsToday := 0;
       lastDailyReset := now;
     };
+
     let updated : UserBalance = {
       tokens = balance.tokens;
       postsThisMonth = postsThisMonth;
@@ -199,7 +223,7 @@ actor ScaleSpace {
   private func indexPost(postId : Nat, content : Text) {
     let words = Text.split(content, #char ' ');
     for (word in words) {
-      let lower = Text.toLower(word);
+      let lower = Text.toLowercase(word);
       if (Text.size(lower) > 2) {
         switch (keywordIndex.get(lower)) {
           case (?ids) { keywordIndex.put(lower, Array.append(ids, [postId])); };
@@ -213,7 +237,7 @@ actor ScaleSpace {
     if (Principal.isAnonymous(msg.caller)) {
       return "You must be logged in";
     };
-    if (not Principal.isAnonymous(owner)) {
+    if (not isOwnerUnclaimed()) {
       if (Principal.equal(owner, msg.caller)) {
         return "You already own the master profile";
       };
@@ -246,11 +270,13 @@ actor ScaleSpace {
     true
   };
 
+  // ─── Tokenomics / ICP pricing ───────────────────────────────────────────
+
   public query func getSubscriptionOffers() : async [SubOffer] {
     [
-      { tokens = 200; priceE8s = price200E8s; label = "Starter" },
-      { tokens = 400; priceE8s = price400E8s; label = "Regular" },
-      { tokens = 600; priceE8s = price600E8s; label = "Power" },
+      { tokens = 200; priceE8s = price200E8s; tierLabel = "Starter" },
+      { tokens = 400; priceE8s = price400E8s; tierLabel = "Regular" },
+      { tokens = 600; priceE8s = price600E8s; tierLabel = "Power" },
     ]
   };
 
@@ -292,11 +318,13 @@ actor ScaleSpace {
     Buffer.toArray(buf)
   };
 
+  /// User requests a paid tier. Does not credit tokens until master confirms ICP received.
   public shared(msg) func requestPaidSubscription(tokenAmount : Nat) : async Text {
     if (isBannedUser(msg.caller)) { return "You are banned" };
     if (not paymentsEnabled) {
       return "Payments are not live yet. Use test subscribe or wait for launch.";
     };
+
     switch (priceForTokens(tokenAmount)) {
       case null { return "Invalid tier. Choose 200, 400, or 600." };
       case (?price) {
@@ -315,8 +343,10 @@ actor ScaleSpace {
     }
   };
 
+  /// Master confirms ICP was received and credits tokens.
   public shared(msg) func adminConfirmPayment(pendingId : Nat) : async Text {
     if (not isMaster(msg.caller)) { return "Not authorized" };
+
     switch (pendingPayments.get(pendingId)) {
       case null { return "Pending payment not found" };
       case (?p) {
@@ -370,6 +400,7 @@ actor ScaleSpace {
       return "Character limits must be at least 1";
     };
     if (reportsToHide_ == 0) { return "Reports to hide must be at least 1" };
+
     freeTierLimit := freeTierLimit_;
     dailyLimit := dailyLimit_;
     tokensPerPost := tokensPerPost_;
@@ -453,6 +484,7 @@ actor ScaleSpace {
         bannedUsers = 0; tokensInCirculation = 0;
       };
     };
+
     var visible : Nat = 0;
     var hidden : Nat = 0;
     var reported : Nat = 0;
@@ -464,14 +496,17 @@ actor ScaleSpace {
         reportFlags += post.reportCount;
       };
     };
+
     var bannedCount : Nat = 0;
     for ((p, flag) in banned.entries()) {
       if (flag) { bannedCount += 1 };
     };
+
     var tokenSum : Nat = 0;
     for ((p, bal) in userBalances.entries()) {
       tokenSum += bal.tokens;
     };
+
     {
       totalPosts = nextPostId;
       visiblePosts = visible;
@@ -539,6 +574,7 @@ actor ScaleSpace {
     }
   };
 
+  /// Test-mode free subscribe. Locked when payments are enabled (except master).
   public shared(msg) func subscribe(tokenAmount : Nat) : async Text {
     if (isBannedUser(msg.caller)) { return "You are banned" };
     if (paymentsEnabled and not isMaster(msg.caller)) {
@@ -554,13 +590,12 @@ actor ScaleSpace {
     "Added " # Nat.toText(tokenAmount) # " tokens"
   };
 
-  public shared(msg) func spendTokens(amount : Nat) : async Bool {
-    if (isBannedUser(msg.caller)) { return false };
+  private func spendTokensInternal(user : Principal, amount : Nat) : Bool {
     if (amount == 0) { return true };
-    var balance = getUserBalance(msg.caller);
-    balance := maybeReset(msg.caller, balance);
+    var balance = getUserBalance(user);
+    balance := maybeReset(user, balance);
     if (balance.tokens < amount) { return false };
-    userBalances.put(msg.caller, {
+    userBalances.put(user, {
       tokens = balance.tokens - amount;
       postsThisMonth = balance.postsThisMonth;
       postsToday = balance.postsToday;
@@ -570,7 +605,24 @@ actor ScaleSpace {
     true
   };
 
+  public shared(msg) func spendTokens(amount : Nat) : async Bool {
+    if (isBannedUser(msg.caller)) { return false };
+    spendTokensInternal(msg.caller, amount)
+  };
+
+  /// Charge for a DM. Free for master, and free while payments are off (test mode).
+  public shared(msg) func chargeForMessage() : async Bool {
+    if (isBannedUser(msg.caller)) { return false };
+    if (isMaster(msg.caller)) { return true };
+    if (not paymentsEnabled) { return true };
+    spendTokensInternal(msg.caller, tokensPerMessage)
+  };
+
   public query func getTokensPerMessage() : async Nat { tokensPerMessage };
+
+  public query func isMessagingFree() : async Bool {
+    not paymentsEnabled
+  };
 
   public query func getUserStats(user : Principal) : async ?{
     tokens : Nat;
@@ -622,6 +674,65 @@ actor ScaleSpace {
       lastDailyReset = balance.lastDailyReset;
     });
     ?postId
+  };
+
+  /// Author can update post text (and optional image URL). Respects length limits.
+  public shared(msg) func editPost(postId : Nat, content : Text, imageURL : ?Text) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    if (Text.size(content) == 0) { return "Content cannot be empty" };
+    switch (posts.get(postId)) {
+      case null { return "Post not found" };
+      case (?post) {
+        if (not Principal.equal(post.author, msg.caller)) {
+          return "Only the author can edit this post";
+        };
+        if (post.isHidden) { return "Cannot edit a hidden post" };
+        var balance = getUserBalance(msg.caller);
+        balance := maybeReset(msg.caller, balance);
+        let master = isMaster(msg.caller);
+        let isFree = balance.postsThisMonth < freeTierLimit;
+        let maxLength = if (master or not isFree) { paidMaxLength } else { freeMaxLength };
+        if (Text.size(content) > maxLength) {
+          return "Post is too long for your tier";
+        };
+        posts.put(postId, {
+          id = post.id;
+          author = post.author;
+          content = content;
+          imageURL = imageURL;
+          timestamp = post.timestamp;
+          likes = post.likes;
+          loves = post.loves;
+          reportCount = post.reportCount;
+          isHidden = post.isHidden;
+        });
+        // Re-index new words (old keyword entries may remain; search skips missing posts)
+        indexPost(postId, content);
+        "Post updated"
+      };
+    }
+  };
+
+  /// Author can permanently remove their post. Master can also delete any post.
+  public shared(msg) func deletePost(postId : Nat) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    switch (posts.get(postId)) {
+      case null { return "Post not found" };
+      case (?post) {
+        let authorOk = Principal.equal(post.author, msg.caller);
+        let masterOk = isMaster(msg.caller);
+        if (not authorOk and not masterOk) {
+          return "Only the author or master can delete this post";
+        };
+        posts.delete(postId);
+        postLikers.delete(postId);
+        postLovers.delete(postId);
+        reports.delete(postId);
+        // Drop comment index for this post (comment records may remain orphaned)
+        postComments.delete(postId);
+        "Post deleted"
+      };
+    }
   };
 
   public query func getPost(postId : Nat) : async ?Post {
@@ -698,11 +809,35 @@ actor ScaleSpace {
     }
   };
 
+  public query func hasLiked(postId : Nat, user : Principal) : async Bool {
+    switch (postLikers.get(postId)) {
+      case (?list) { principalInList(list, user) };
+      case null { false };
+    }
+  };
+
+  public query func hasLoved(postId : Nat, user : Principal) : async Bool {
+    switch (postLovers.get(postId)) {
+      case (?list) { principalInList(list, user) };
+      case null { false };
+    }
+  };
+
   public shared(msg) func likePost(postId : Nat) : async Bool {
     if (isBannedUser(msg.caller)) { return false };
     switch (posts.get(postId)) {
       case (?post) {
         if (post.isHidden) { return false };
+        // Already liked — do not increment again
+        switch (postLikers.get(postId)) {
+          case (?list) {
+            if (principalInList(list, msg.caller)) { return false };
+            postLikers.put(postId, Array.append(list, [msg.caller]));
+          };
+          case null {
+            postLikers.put(postId, [msg.caller]);
+          };
+        };
         posts.put(postId, {
           id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
           timestamp = post.timestamp; likes = post.likes + 1; loves = post.loves;
@@ -719,6 +854,13 @@ actor ScaleSpace {
     switch (posts.get(postId)) {
       case (?post) {
         if (post.isHidden) { return false };
+        // Already loved — do not charge tokens or increment again
+        switch (postLovers.get(postId)) {
+          case (?list) {
+            if (principalInList(list, msg.caller)) { return false };
+          };
+          case null {};
+        };
         var balance = getUserBalance(msg.caller);
         balance := maybeReset(msg.caller, balance);
         if (balance.tokens < tokensPerLove) { return false };
@@ -737,6 +879,10 @@ actor ScaleSpace {
           lastReset = authorBalance.lastReset;
           lastDailyReset = authorBalance.lastDailyReset;
         });
+        switch (postLovers.get(postId)) {
+          case (?list) { postLovers.put(postId, Array.append(list, [msg.caller])); };
+          case null { postLovers.put(postId, [msg.caller]); };
+        };
         posts.put(postId, {
           id = post.id; author = post.author; content = post.content; imageURL = post.imageURL;
           timestamp = post.timestamp; likes = post.likes; loves = post.loves + 1;
@@ -767,6 +913,57 @@ actor ScaleSpace {
     ?commentId
   };
 
+  /// Author can edit their comment text.
+  public shared(msg) func editComment(commentId : Nat, content : Text) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    if (Text.size(content) == 0) { return "Content cannot be empty" };
+    if (Text.size(content) > maxCommentLength) { return "Comment is too long" };
+    switch (comments.get(commentId)) {
+      case null { return "Comment not found" };
+      case (?c) {
+        if (not Principal.equal(c.author, msg.caller)) {
+          return "Only the author can edit this comment";
+        };
+        comments.put(commentId, {
+          id = c.id;
+          postId = c.postId;
+          author = c.author;
+          content = content;
+          timestamp = c.timestamp;
+        });
+        "Comment updated"
+      };
+    }
+  };
+
+  /// Author or master can delete a comment.
+  public shared(msg) func deleteComment(commentId : Nat) : async Text {
+    if (isBannedUser(msg.caller)) { return "You are banned" };
+    switch (comments.get(commentId)) {
+      case null { return "Comment not found" };
+      case (?c) {
+        let authorOk = Principal.equal(c.author, msg.caller);
+        let masterOk = isMaster(msg.caller);
+        if (not authorOk and not masterOk) {
+          return "Only the author or master can delete this comment";
+        };
+        comments.delete(commentId);
+        // Remove id from post's comment list
+        switch (postComments.get(c.postId)) {
+          case (?ids) {
+            let buf = Buffer.Buffer<Nat>(0);
+            for (id in ids.vals()) {
+              if (id != commentId) { buf.add(id) };
+            };
+            postComments.put(c.postId, Buffer.toArray(buf));
+          };
+          case null {};
+        };
+        "Comment deleted"
+      };
+    }
+  };
+
   public query func getComments(postId : Nat) : async [Comment] {
     switch (postComments.get(postId)) {
       case (?ids) {
@@ -784,7 +981,7 @@ actor ScaleSpace {
   };
 
   public query func searchPosts(keyword : Text) : async [Post] {
-    let lower = Text.toLower(keyword);
+    let lower = Text.toLowercase(keyword);
     switch (keywordIndex.get(lower)) {
       case (?ids) {
         let buf = Buffer.Buffer<Post>(0);
