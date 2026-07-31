@@ -8,5 +8,7 @@ frontend/src/declarations/
 .vessel/
 .mops/
 *.wasm
+*.wasm.gz
+internet_identity/
 .idea/
 .vscode/

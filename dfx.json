@@ -1,11 +1,11 @@
 {
   "version": 1,
   "canisters": {
-    "scalespace": {
+    "ice": {
       "type": "motoko",
       "main": "backend/main.mo",
       "declarations": {
-        "output": "frontend/src/declarations/scalespace",
+        "output": "frontend/src/declarations/ice",
         "bindings": ["js", "ts", "did"]
       }
     },
@@ -20,7 +20,18 @@
     "assets": {
       "type": "assets",
       "source": ["frontend/dist"],
-      "dependencies": ["scalespace", "messaging"]
+      "dependencies": ["ice", "messaging"]
+    },
+    "internet_identity": {
+      "type": "custom",
+      "candid": "internet_identity/internet_identity.did",
+      "wasm": "internet_identity/internet_identity_dev.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "frontend": {}
     }
   },
   "defaults": {
