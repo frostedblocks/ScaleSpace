@@ -112,6 +112,7 @@ export default function App() {
           <h1
             style={{ margin: 0, cursor: "pointer", fontSize: "1.5rem", fontWeight: 700, color: "#fafafa", letterSpacing: "0.06em" }}
             onClick={goFeed}
+            title="Internet Communications Environment"
           >
             I.C.E.
           </h1>
@@ -162,7 +163,13 @@ export default function App() {
 
         {!identity ? (
           <div style={{ textAlign: "center", marginTop: "4rem" }}>
-            <p style={{ color: "#a1a1aa", marginBottom: "1.5rem" }}>
+            <h2 style={{ margin: "0 0 0.5rem 0", color: "#fafafa", fontWeight: 700, letterSpacing: "0.08em" }}>
+              I.C.E.
+            </h2>
+            <p style={{ color: "#a1a1aa", margin: "0 0 0.35rem 0", fontSize: "0.95rem" }}>
+              Internet Communications Environment
+            </p>
+            <p style={{ color: "#71717a", marginBottom: "1.75rem", fontSize: "0.9rem" }}>
               A quieter place for real conversation.
             </p>
             <button
